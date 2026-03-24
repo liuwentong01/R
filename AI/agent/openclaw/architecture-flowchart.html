@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Code 架构全景图</title>
+    <title>OpenClaw 架构全景图</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -87,7 +87,7 @@
 </head>
 <body>
     <div id="toolbar">
-        <h1>Claude Code 架构全景图</h1>
+        <h1>OpenClaw 架构全景图</h1>
         <span class="hint">滚轮缩放 | 拖拽平移 | 快捷键: +/- 缩放, F 适应, 0 重置</span>
         <button onclick="zoomIn()">+ 放大</button>
         <button onclick="zoomOut()">- 缩小</button>
@@ -105,319 +105,274 @@ flowchart TB
     %% ============================================================
     %% 01 整体架构
     %% ============================================================
-    subgraph OVERVIEW["01 整体架构"]
+    subgraph OVERVIEW["01 整体架构与设计原则"]
         direction TB
-        USER["用户输入<br/>自然语言 / CLI 命令"]
-        ARCH["Claude Code 四大支柱<br/>CLI Shell + Agentic Loop<br/>+ 工具系统 + 权限模型"]
+        DESIGN["OpenClaw 四大设计原则<br/>Gateway 中心化 / Plugin Everything<br/>Agent 隔离 / 安全一等公民"]
+        MONO["pnpm Monorepo 架构<br/>CalVer 版本号 / tsdown 构建<br/>Plugin SDK 4大导出 + 90+子路径"]
     end
 
     %% ============================================================
-    %% 02 启动流程
+    %% 02 Gateway 网关
     %% ============================================================
-    subgraph STARTUP["02 启动流程"]
+    subgraph GATEWAY["02 Gateway 网关 - 控制平面"]
         direction TB
-        CLI_ENTRY["cli.js 入口<br/>ESM 单文件 Bundle"]
-        MAIN_PARSE["Commander.js<br/>命令行解析"]
-        RUN_FUNC["run 函数<br/>核心启动逻辑"]
+        GW_STARTUP["Gateway 启动 - 11步<br/>加载配置 > 初始化插件 > 连接通道<br/>> 启动 WS+HTTP 双协议"]
 
-        subgraph SETUP["setup 初始化"]
+        subgraph GW_PROTO["双协议服务"]
+            direction LR
+            GW_WS["WebSocket 协议<br/>设备连接 / 帧格式 / 心跳"]
+            GW_HTTP["HTTP 10级管道<br/>CORS > Auth > Rate > Route<br/>> Handle > Error"]
+        end
+
+        subgraph GW_SECURITY["11层安全体系"]
+            direction LR
+            GW_AUTH["5种认证模式<br/>Ed25519 设备认证 v3"]
+            GW_RATE["速率限制<br/>令牌桶算法"]
+            GW_SANDBOX["沙箱隔离<br/>进程级隔离"]
+        end
+
+        GW_CONFIG["配置热重载<br/>混合模式: 文件监听 + 主动推送"]
+        GW_LANE["Lane 并发控制<br/>Main / Cron / Subagent / Nested<br/>4条并行执行轨道"]
+        GW_HEALTH["通道健康监控<br/>指数退避重连 / 自动恢复"]
+        GW_BOOT["BOOT.md 启动脚本<br/>系统初始化指令执行"]
+    end
+
+    %% ============================================================
+    %% 03 通道与路由
+    %% ============================================================
+    subgraph CHANNEL["03 通道与路由"]
+        direction TB
+        MSG_IN["消息接入<br/>20+ 通道统一为<br/>InboundMessage 标准格式"]
+
+        subgraph MSG_PROCESS["消息预处理"]
+            direction LR
+            DEDUP["去重/防抖<br/>相同消息合并"]
+            DM_POLICY["DM 访问策略<br/>pairing / allowlist / open"]
+        end
+
+        subgraph ROUTING["多 Agent 路由引擎"]
             direction TB
-            CONFIG_LOAD["配置加载 - 7级优先级<br/>CLI参数 > 环境变量 > settings文件<br/>> 项目配置 > 用户配置 > CLAUDE.md > 默认值"]
-            PREFETCH["并行预取<br/>API可用性 / 模型信息 / 用户数据"]
-            PERM_INIT["权限模式初始化<br/>default / plan / auto / bypass"]
-            MCP_CONNECT["连接 MCP Server"]
-            SESSION_RESTORE["会话恢复<br/>--resume / --continue"]
+            ROUTE_MATCH["8级绑定匹配<br/>channel > account > group<br/>> user > DM > tag > default"]
+            ROUTE_AND["AND 语义组合<br/>多条件同时满足"]
+            ROUTE_GROUP["群消息处理<br/>@mention 激活机制"]
         end
 
-        CLI_ENTRY --> MAIN_PARSE --> RUN_FUNC --> CONFIG_LOAD
-        CONFIG_LOAD --> PREFETCH --> PERM_INIT --> MCP_CONNECT --> SESSION_RESTORE
-
-        MODE_SWITCH{"运行模式?"}
-        SESSION_RESTORE --> MODE_SWITCH
-        HEADLESS_MODE["Headless 无头模式<br/>--print / 管道输入"]
-        TUI_MODE["TUI 交互模式<br/>Ink React 终端 UI"]
-        MODE_SWITCH -->|"非交互"| HEADLESS_MODE
-        MODE_SWITCH -->|"交互"| TUI_MODE
+        MSG_OUT["出站消息格式化<br/>分块发送 / 适配各通道"]
     end
 
     %% ============================================================
-    %% 03 Agentic Loop 核心循环
+    %% 04 会话管理
     %% ============================================================
-    subgraph AGENTIC_LOOP["03 Agentic Loop 核心循环"]
+    subgraph SESSION["04 会话管理"]
         direction TB
-        LOOP_START["while 循环启动<br/>async generator 异步迭代"]
-        API_CALL["调用 Anthropic Messages API<br/>SSE 流式传输"]
-        STREAM_PARSE["流式解析响应<br/>逐 token 输出"]
+        SESSION_KEY["Session Key 生成<br/>dmScope 4种模式<br/>user / channel / account / global"]
+        SESSION_STORE["JSONL 转录存储<br/>按 session key 分文件"]
+        SESSION_RESET["重置策略<br/>daily 每日重置 / idle 空闲超时"]
+        SESSION_PRUNE["会话修剪<br/>cache-ttl 模式<br/>soft-trim 软裁剪 / hard-clear 硬清除"]
+        SESSION_COMPACT["会话压缩<br/>压缩前自动刷新记忆<br/>LLM 生成摘要替换历史"]
+        SESSION_MAINT["维护清理<br/>磁盘预算控制"]
 
-        STOP_CHECK{"stop_reason<br/>停止原因?"}
-        END_TURN["end_turn<br/>对话结束,输出最终结果"]
-        TOOL_USE["tool_use<br/>LLM 决定调用工具"]
-        MAX_TOKENS["max_tokens<br/>达到上限,截断续写"]
-
-        TOOL_EXEC_ENTRY["进入工具执行流程"]
-        TOOL_RESULT["tool_result 工具结果<br/>注入 messages 数组<br/>作为下一轮 LLM 输入"]
-
-        BUDGET_CTRL["预算控制<br/>最大轮次 / 最大费用<br/>AbortController 中断"]
-        PROMPT_CACHE["Prompt Caching<br/>缓存不变部分,降低 90% token 费用"]
-
-        LOOP_START --> API_CALL --> STREAM_PARSE --> STOP_CHECK
-        STOP_CHECK -->|"end_turn"| END_TURN
-        STOP_CHECK -->|"tool_use"| TOOL_USE --> TOOL_EXEC_ENTRY
-        STOP_CHECK -->|"max_tokens"| MAX_TOKENS --> API_CALL
-        TOOL_EXEC_ENTRY --> TOOL_RESULT --> API_CALL
-        BUDGET_CTRL -.->|"监控"| LOOP_START
-        PROMPT_CACHE -.->|"优化"| API_CALL
+        SESSION_KEY --> SESSION_STORE --> SESSION_RESET
+        SESSION_RESET --> SESSION_PRUNE --> SESSION_COMPACT
     end
 
     %% ============================================================
-    %% 04 工具系统
+    %% 05 Agent 运行时
     %% ============================================================
-    subgraph TOOL_SYSTEM["04 工具系统"]
+    subgraph AGENT["05 Agent 运行时 - Pi Agent Core"]
         direction TB
-        subgraph BUILTIN_TOOLS["20+ 内置工具"]
+        AGENT_LOOP["核心执行循环 - 9步<br/>接收消息 > 组装上下文<br/>> 调用 LLM > 处理响应<br/>> 执行工具 > 循环直到完成"]
+
+        subgraph QUEUE["5种队列模式"]
             direction LR
-            CMD_TOOLS["命令执行<br/>Bash"]
-            FILE_TOOLS["文件操作<br/>Read / Write / Edit"]
-            SEARCH_TOOLS["搜索<br/>Glob / Grep<br/>ripgrep 加速"]
-            SUB_TOOLS["子任务<br/>Agent / Task*"]
-            NET_TOOLS["网络<br/>WebFetch / WebSearch"]
-            OTHER_TOOLS["其他<br/>Notebook / AskUser<br/>Worktree / Config"]
+            Q_STEER["steer 转向<br/>替换当前任务"]
+            Q_FOLLOWUP["followup 跟进<br/>追加到队列"]
+            Q_COLLECT["collect 收集<br/>合并多条消息"]
+            Q_INTERRUPT["interrupt 中断<br/>立即打断执行"]
         end
 
-        subgraph TOOL_LIFECYCLE["工具生命周期 - 7步"]
+        subgraph PROVIDER["LLM 供应商管理"]
             direction LR
-            T_REG["注册"]
-            T_DESC["描述生成"]
-            T_SELECT["LLM 选择"]
-            T_VALID["参数校验"]
-            T_PERM["权限检查"]
-            T_EXEC["执行"]
-            T_RES["返回结果"]
-            T_REG --> T_DESC --> T_SELECT --> T_VALID --> T_PERM --> T_EXEC --> T_RES
+            PROV_FAILOVER["2级故障转移<br/>1. auth profile 轮换<br/>2. 模型降级"]
+            PROV_STREAM["流式输出<br/>Block Streaming<br/>Preview Streaming"]
         end
 
-        MCP_TOOLS_REF["MCP 外部工具<br/>mcp__服务名__工具名"]
+        AGENT_THINKING["Thinking 模式<br/>extended thinking 深度推理"]
+        AGENT_SUBAGENT["子 Agent 系统 ACP<br/>主 Agent 派生子 Agent<br/>独立运行/结果回传"]
     end
 
     %% ============================================================
-    %% 05 权限系统
+    %% 06 上下文引擎
     %% ============================================================
-    subgraph PERM_SYSTEM["05 权限系统"]
+    subgraph CONTEXT["06 上下文引擎 - 4阶段生命周期"]
         direction TB
-        CAN_USE["canUseTool 权限检查入口"]
-        WHITELIST["白名单检查<br/>allowedTools / Always Allow 规则"]
-        BLACKLIST["黑名单检查<br/>disallowedTools 绝对禁止"]
+        CTX_INGEST["Ingest 摄入<br/>接收新消息/工具结果"]
+        CTX_ASSEMBLE["Assemble 组装<br/>13部分系统提示词<br/>+ workspace bootstrap 8文件<br/>+ Skills 注入"]
+        CTX_COMPACT["Compact 压缩<br/>上下文超限时触发<br/>ownsCompaction 委托桥"]
+        CTX_AFTER["AfterTurn 后处理<br/>清理/统计/记忆更新"]
 
-        subgraph PERM_MODES["4种权限模式"]
+        subgraph CTX_PROMPT["系统提示词 13部分"]
             direction LR
-            P_DEFAULT["default 默认<br/>危险操作需人工确认"]
-            P_PLAN["plan 计划<br/>纯只读,禁止修改"]
-            P_BYPASS["bypass 跳过<br/>所有操作直接放行<br/>仅限沙箱环境"]
-            P_AUTO["auto 自动<br/>规则引擎判断<br/>高危仍需确认"]
+            CTX_ROLE["角色定义<br/>性格/能力/约束"]
+            CTX_TOOLS["工具描述<br/>可用工具列表"]
+            CTX_WORKSPACE["工作空间文件<br/>CLAUDE.md / README 等8文件"]
+            CTX_SKILLS["Skills 注入<br/>3级加载"]
+            CTX_MEMORY["记忆注入<br/>长期记忆召回"]
         end
 
-        USER_CONFIRM["用户确认弹窗<br/>Allow / Deny / Always Allow"]
-        PERM_DENIAL["拒绝记录追踪<br/>反馈给 LLM 避免重复尝试"]
-
-        CAN_USE --> WHITELIST -->|"未匹配"| BLACKLIST -->|"未匹配"| PERM_MODES
-        WHITELIST -->|"命中白名单"| ALLOW_RESULT["放行"]
-        BLACKLIST -->|"命中黑名单"| DENY_RESULT["拒绝"]
-        PERM_MODES -->|"需确认"| USER_CONFIRM
-        USER_CONFIRM -->|"用户拒绝"| PERM_DENIAL
+        CTX_INGEST --> CTX_ASSEMBLE --> CTX_COMPACT --> CTX_AFTER
+        CTX_REGISTRY["引擎注册表<br/>Symbol.for 全局单例<br/>Legacy Engine 兼容"]
     end
 
     %% ============================================================
-    %% 06 System Prompt 系统提示词
+    %% 07 工具与能力
     %% ============================================================
-    subgraph SYS_PROMPT["06 System Prompt 系统提示词"]
+    subgraph TOOLS["07 工具与能力"]
         direction TB
-        subgraph PROMPT_LAYERS["5层架构 - 由静到动"]
-            direction TB
-            L1["Layer 1: 核心指令<br/>不可变的角色定义与安全规则"]
-            L2["Layer 2: 用户上下文<br/>CLAUDE.md 多级加载<br/>全局 > 项目 > 子目录"]
-            L3["Layer 3: 系统上下文<br/>git 状态 / OS / 日期 / 工作目录"]
-            L4["Layer 4: 自定义追加内容"]
-            L5["Layer 5: 动态内容<br/>Memory / Skills / MCP 工具描述"]
-            L1 --> L2 --> L3 --> L4 --> L5
+        subgraph TOOL_TYPES["工具层次"]
+            direction LR
+            T_BUILTIN["15+ 内置工具<br/>文件/搜索/浏览器/代码"]
+            T_PLUGIN["插件工具<br/>Plugin 提供"]
+            T_SKILLS["Skills 工具<br/>3级加载"]
+            T_NODE["Node 能力<br/>iOS/Android 设备功能"]
         end
-        TOKEN_BUDGET["Token 预算管理<br/>按优先级截断,保证核心指令完整"]
+
+        T_BROWSER["浏览器工具<br/>CDP 协议控制"]
+        T_CANVAS["Canvas / A2UI<br/>自适应 UI 系统"]
+        T_CRON["Cron 定时任务<br/>周期性自动执行"]
+        T_WEBHOOK["Webhook 系统<br/>外部事件触发"]
+
+        subgraph TOOL_SAFETY["工具安全"]
+            direction LR
+            T_PERM["per-agent 工具权限<br/>每个 Agent 独立配置"]
+            T_APPROVE["执行审批<br/>human-in-the-loop"]
+            T_LOOP_DET["循环检测<br/>防止无限工具调用"]
+        end
     end
 
     %% ============================================================
-    %% 07 UI 层
+    %% 08 记忆系统
     %% ============================================================
-    subgraph UI_LAYER["07 UI 渲染层"]
+    subgraph MEMORY["08 记忆系统"]
         direction TB
-        INK_ENGINE["Ink 渲染引擎<br/>React 18 + Yoga Flexbox<br/>终端 UI 框架"]
+        MEM_MD["纯 Markdown 文件<br/>MEMORY.md 持久化存储"]
+        MEM_INDEX["MemoryIndexManager<br/>SQLite + 向量 + BM25<br/>混合搜索"]
+        MEM_LANCE["memory-lancedb 插件<br/>向量搜索 / 自动捕获<br/>prompt injection 检测"]
+        MEM_LIFECYCLE["4阶段生命周期<br/>收集 > 存储 > 检索 > 刷新"]
+        MEM_PRECOMPACT["压缩前记忆刷新<br/>上下文压缩前<br/>自动提取重要信息存入记忆"]
 
-        subgraph UI_MODES["两种模式"]
-            direction LR
-            UI_TUI["TUI 交互模式<br/>消息流 / 流式输出<br/>工具卡片 / 权限弹窗"]
-            UI_HEADLESS["Headless 模式<br/>纯 stdout / CI/CD 友好"]
-        end
-
-        subgraph OUTPUT_FMT["3种输出格式"]
-            direction LR
-            FMT_TEXT["text 人类可读"]
-            FMT_JSON["json 结构化"]
-            FMT_STREAM["stream-json NDJSON 实时流"]
-        end
+        MEM_MD --> MEM_INDEX
+        MEM_INDEX --> MEM_LANCE
     end
 
     %% ============================================================
-    %% 08 会话管理
+    %% 09 插件系统
     %% ============================================================
-    subgraph SESSION_MGT["08 会话管理"]
+    subgraph PLUGIN["09 插件系统 - 70+ 插件"]
         direction TB
-        SESSION_STORE["本地持久化存储<br/>~/.claude/projects/hash/id.jsonl"]
-        SESSION_RECOVERY["会话恢复<br/>--resume 恢复指定会话<br/>--continue 继续上次<br/>--fork 分叉新会话"]
-        CTX_COMPRESS["上下文压缩<br/>token 达到窗口 ~80% 时触发<br/>LLM 生成摘要替换历史消息"]
+        PLUG_DISCOVER["插件发现 - 4来源<br/>内置 / 社区 / 本地 / 远程<br/>含安全检查"]
+        PLUG_MANIFEST["插件清单<br/>manifest 声明式配置"]
 
-        SESSION_STORE --> SESSION_RECOVERY
+        subgraph PLUG_TYPES["7种插件类型"]
+            direction LR
+            PT_CHANNEL["Channel 通道<br/>消息接入"]
+            PT_PROVIDER["Provider 供应商<br/>LLM 对接"]
+            PT_MEMORY["Memory 记忆<br/>持久化存储"]
+            PT_CONTEXT["Context Engine<br/>上下文管理"]
+            PT_TOOL["Tool 工具<br/>能力扩展"]
+        end
+
+        subgraph PLUG_HOOKS["25个生命周期 Hook"]
+            direction LR
+            PH_VOID["void 无返回<br/>纯通知"]
+            PH_MODIFY["modifying 修改<br/>可改变数据"]
+            PH_CLAIM["claiming 认领<br/>独占处理"]
+            PH_SYNC["synchronous 同步<br/>阻塞等待"]
+        end
+
+        PLUG_SLOT["Slot 排他系统<br/>memory / context-engine<br/>独占位,防止冲突"]
+        PLUG_SDK["Plugin SDK<br/>严格导入边界<br/>PluginRuntime 深度访问"]
+        PLUG_INJECT["Prompt 注入防护<br/>插件安全控制"]
     end
 
     %% ============================================================
-    %% 09 MCP 集成
+    %% 10 Companion Apps
     %% ============================================================
-    subgraph MCP_INTEGRATION["09 MCP 协议集成"]
+    subgraph COMPANION["10 Companion Apps 伴侣应用"]
         direction TB
-        MCP_PROTO["MCP - Model Context Protocol<br/>AI 工具的 USB 接口标准<br/>JSON-RPC 2.0"]
-
-        subgraph MCP_TRANSPORT["传输方式"]
+        subgraph COMP_APPS["多平台客户端"]
             direction LR
-            MCP_STDIO["stdio 本地子进程"]
-            MCP_HTTP["Streamable HTTP 远程"]
+            COMP_MAC["macOS<br/>Swabble 框架<br/>语音唤醒 / Talk 模式"]
+            COMP_IOS["iOS<br/>SwiftUI / Node 能力<br/>Bonjour 发现"]
+            COMP_ANDROID["Android<br/>Kotlin + Compose<br/>SMS/通话记录"]
+            COMP_CLI["CLI 命令行<br/>终端交互"]
         end
-
-        subgraph MCP_CAPS["3种能力"]
-            direction LR
-            MCP_CAP_TOOLS["Tools 工具调用"]
-            MCP_CAP_RES["Resources 资源读取"]
-            MCP_CAP_PROMPT["Prompts 提示模板"]
-        end
-
-        MCP_NAMING["工具命名规范<br/>mcp__服务名__工具名"]
-        MCP_HANDSHAKE["初始化握手<br/>initialize > tools/list"]
+        COMP_UI["Control UI<br/>Lit + Vite Web 控制台"]
+        COMP_TYPEBOX["TypeBox 协议<br/>代码自动生成类型安全通信"]
     end
 
     %% ============================================================
-    %% 10 Agent 子系统
-    %% ============================================================
-    subgraph AGENT_SUB["10 Agent 子系统"]
-        direction TB
-        NESTED_AGENT["嵌套 Agent 模式<br/>主 Agent 生成子 Agent<br/>类似操作系统进程模型"]
-
-        subgraph AGENT_TYPES["Agent 类型"]
-            direction LR
-            AG_GENERAL["通用型<br/>全部工具 / Sonnet"]
-            AG_EXPLORE["Explore 探索<br/>只读 / Haiku 降级省成本"]
-            AG_PLAN["Plan 规划<br/>只读 / Sonnet"]
-            AG_CUSTOM["Custom 自定义<br/>自定义提示词"]
-        end
-
-        GIT_WORKTREE["Git Worktree 隔离<br/>子 Agent 独立工作目录<br/>支持并行文件修改"]
-        MAP_REDUCE["MapReduce 并行模式<br/>拆分任务 > 并行执行 > 汇总结果"]
-    end
-
-    %% ============================================================
-    %% 11 插件与 Hooks
-    %% ============================================================
-    subgraph PLUGIN_HOOKS["11 插件与 Hooks"]
-        direction TB
-        PLUGINS["插件 = MCP Server<br/>user / project / local 三级作用域"]
-
-        subgraph HOOK_EVENTS["Hooks 生命周期事件"]
-            direction LR
-            H_PRE["PreToolUse<br/>工具执行前拦截"]
-            H_POST["PostToolUse<br/>工具执行后处理"]
-            H_PROMPT["UserPromptSubmit<br/>用户提交时触发"]
-            H_STOP["Stop<br/>会话结束时触发"]
-        end
-
-        SANDBOX["沙箱安全机制<br/>macOS Seatbelt 限制<br/>网络/文件系统隔离"]
-        AUTO_MEMORY["Auto Memory<br/>MEMORY.md 跨会话持久记忆"]
-    end
-
-    %% ============================================================
-    %% 12 技术栈与性能
-    %% ============================================================
-    subgraph TECH_STACK["12 技术栈与性能优化"]
-        direction TB
-        subgraph CORE_TECH["核心技术选型"]
-            direction LR
-            NODEJS["Node.js 18+ ESM"]
-            COMMANDER["Commander.js 命令行"]
-            INK_REACT["Ink + React 18 终端UI"]
-            ANTHROPIC_API["Anthropic Messages API"]
-        end
-
-        subgraph PERF_OPT["关键性能优化"]
-            direction LR
-            PERF_STREAM["SSE 流式输出<br/>首 token 即响应"]
-            PERF_PREFETCH["启动并行预取"]
-            PERF_RG["ripgrep 原生搜索"]
-            PERF_CACHE["Prompt Caching<br/>缓存省 90% 费用"]
-            PERF_DOWNGRADE["子Agent 模型降级<br/>Haiku 省成本"]
-        end
-    end
-
-    %% ============================================================
-    %% 模块间连接 - 主流程
+    %% 主流程连接线
     %% ============================================================
 
-    %% 用户 -> 启动
-    USER --> CLI_ENTRY
+    %% 用户消息入口
+    MSG_IN --> DEDUP --> DM_POLICY --> ROUTE_MATCH
 
-    %% 启动 -> UI
-    HEADLESS_MODE --> UI_HEADLESS
-    TUI_MODE --> UI_TUI
+    %% 路由到 Agent
+    ROUTE_MATCH --> SESSION_KEY
+    SESSION_KEY --> AGENT_LOOP
 
-    %% 启动 -> 核心循环
-    MODE_SWITCH --> LOOP_START
+    %% Agent 执行
+    AGENT_LOOP --> CTX_ASSEMBLE
+    CTX_ASSEMBLE --> AGENT_LOOP
 
-    %% 核心循环 -> System Prompt
-    API_CALL -.->|"构建提示词"| SYS_PROMPT
+    %% Agent 调用工具
+    AGENT_LOOP --> T_BUILTIN
+    T_BUILTIN --> AGENT_LOOP
 
-    %% 核心循环 -> 工具系统
-    TOOL_EXEC_ENTRY --> T_VALID
+    %% 工具安全检查
+    T_BUILTIN --> T_PERM
+    T_PERM --> T_APPROVE
 
-    %% 工具 -> 权限检查
-    T_PERM --> CAN_USE
+    %% 子 Agent
+    AGENT_SUBAGENT -.->|"派生子循环"| AGENT_LOOP
 
-    %% 工具 -> MCP
-    MCP_TOOLS_REF --> MCP_NAMING
+    %% LLM 调用
+    AGENT_LOOP --> PROV_FAILOVER
+    PROV_FAILOVER --> PROV_STREAM
 
-    %% 权限 -> UI 确认
-    USER_CONFIRM -.->|"弹窗展示"| UI_TUI
+    %% 上下文与记忆
+    CTX_MEMORY -.->|"召回记忆"| MEM_INDEX
+    MEM_PRECOMPACT -.->|"压缩前保存"| CTX_COMPACT
+    CTX_AFTER -.->|"更新记忆"| MEM_MD
 
-    %% 循环 -> 会话管理
-    END_TURN -.->|"保存会话"| SESSION_STORE
-    API_CALL -.->|"token 监控"| CTX_COMPRESS
+    %% Gateway 管理
+    GW_STARTUP --> MSG_IN
+    GW_STARTUP --> GW_BOOT
+    GW_LANE -.->|"并发调度"| AGENT_LOOP
+    GW_HEALTH -.->|"监控通道"| MSG_IN
 
-    %% 启动 -> MCP 连接
-    MCP_CONNECT --> MCP_HANDSHAKE
+    %% 插件集成
+    PLUG_DISCOVER --> PT_CHANNEL
+    PT_CHANNEL -.->|"提供通道"| MSG_IN
+    PT_PROVIDER -.->|"提供 LLM"| PROV_FAILOVER
+    PT_MEMORY -.->|"提供记忆"| MEM_INDEX
+    PT_CONTEXT -.->|"提供引擎"| CTX_REGISTRY
+    PH_MODIFY -.->|"Hook 拦截"| AGENT_LOOP
 
-    %% 工具 -> 子 Agent
-    SUB_TOOLS --> NESTED_AGENT
+    %% 会话持久化
+    AGENT_LOOP -.->|"保存转录"| SESSION_STORE
+    SESSION_COMPACT -.->|"压缩上下文"| CTX_COMPACT
 
-    %% 子 Agent -> 自己的循环
-    NESTED_AGENT -.->|"启动子循环"| LOOP_START
+    %% Companion 连接
+    COMP_APPS -.->|"连接 Gateway"| GW_WS
+    COMP_UI -.->|"管理控制"| GW_HTTP
 
-    %% MCP -> 插件
-    MCP_INTEGRATION -.->|"插件即 MCP"| PLUGINS
+    %% 出站
+    PROV_STREAM --> MSG_OUT
 
-    %% Hooks -> 工具执行
-    H_PRE -.->|"拦截/修改"| T_EXEC
-    H_POST -.->|"后处理"| T_RES
-
-    %% Memory -> Prompt
-    AUTO_MEMORY -.->|"注入动态层"| L5
-
-    %% 权限拒绝 -> 反馈循环
-    PERM_DENIAL -.->|"反馈给 LLM"| AGENTIC_LOOP
-
-    %% 技术栈 -> 底座
-    TECH_STACK -.->|"技术底座"| OVERVIEW
+    %% 设计原则支撑
+    OVERVIEW -.->|"架构基础"| GATEWAY
                 </pre>
             </div>
         </div>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Code 架构全景图</title>
+    <title>Agent / Skills / Teams 架构演进全景图</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -87,7 +87,7 @@
 </head>
 <body>
     <div id="toolbar">
-        <h1>Claude Code 架构全景图</h1>
+        <h1>Agent / Skills / Teams 架构演进全景图</h1>
         <span class="hint">滚轮缩放 | 拖拽平移 | 快捷键: +/- 缩放, F 适应, 0 重置</span>
         <button onclick="zoomIn()">+ 放大</button>
         <button onclick="zoomOut()">- 缩小</button>
@@ -103,321 +103,254 @@
 
 flowchart TB
     %% ============================================================
-    %% 01 整体架构
+    %% 01 从对话到 Agent 的范式转变
     %% ============================================================
-    subgraph OVERVIEW["01 整体架构"]
+    subgraph PHASE1["01 从 Chatbot 到 Agent"]
         direction TB
-        USER["用户输入<br/>自然语言 / CLI 命令"]
-        ARCH["Claude Code 四大支柱<br/>CLI Shell + Agentic Loop<br/>+ 工具系统 + 权限模型"]
+        P1_CHAT["传统对话 AI<br/>输入 > LLM > 输出<br/>无记忆 / 无行动能力"]
+        P1_RAG["RAG 增强<br/>输入 > 检索 > LLM > 输出<br/>有知识但仍无法行动"]
+        P1_AGENT["Agent 范式<br/>感知 > 推理 > 行动 > 观察<br/>自主循环直到任务完成"]
+
+        P1_CHAT -->|"增加外部知识"| P1_RAG
+        P1_RAG -->|"增加行动能力"| P1_AGENT
+
+        subgraph AGENT_4LAYER["Agent 四层架构模型"]
+            direction LR
+            AL_LLM["Layer 1: LLM 核心<br/>推理引擎"]
+            AL_TOOLS["Layer 2: Tools 工具<br/>与外部世界交互"]
+            AL_SKILLS["Layer 3: Skills 技能<br/>专业领域能力"]
+            AL_ORCH["Layer 4: Orchestration<br/>多 Agent 编排"]
+            AL_LLM --> AL_TOOLS --> AL_SKILLS --> AL_ORCH
+        end
+
+        P1_AGENT --> AGENT_4LAYER
     end
 
     %% ============================================================
-    %% 02 启动流程
+    %% 02 单 Agent 推理模式
     %% ============================================================
-    subgraph STARTUP["02 启动流程"]
+    subgraph PHASE2["02 单 Agent 推理模式"]
         direction TB
-        CLI_ENTRY["cli.js 入口<br/>ESM 单文件 Bundle"]
-        MAIN_PARSE["Commander.js<br/>命令行解析"]
-        RUN_FUNC["run 函数<br/>核心启动逻辑"]
-
-        subgraph SETUP["setup 初始化"]
+        subgraph PATTERNS["5大核心模式"]
             direction TB
-            CONFIG_LOAD["配置加载 - 7级优先级<br/>CLI参数 > 环境变量 > settings文件<br/>> 项目配置 > 用户配置 > CLAUDE.md > 默认值"]
-            PREFETCH["并行预取<br/>API可用性 / 模型信息 / 用户数据"]
-            PERM_INIT["权限模式初始化<br/>default / plan / auto / bypass"]
-            MCP_CONNECT["连接 MCP Server"]
-            SESSION_RESTORE["会话恢复<br/>--resume / --continue"]
+            PAT_REACT["ReAct 模式<br/>Think > Act > Observe 循环<br/>每步都有推理过程<br/>最基础的 Agent 模式"]
+            PAT_PLAN["Plan-and-Execute<br/>先制定完整计划<br/>再逐步执行 / 支持重规划<br/>适合复杂多步任务"]
+            PAT_REFLECT["Reflexion 反思<br/>失败后自我反省<br/>修正策略再重试<br/>从错误中学习"]
+            PAT_LATS["LATS 树搜索<br/>蒙特卡洛树搜索<br/>多路径并行探索<br/>适合高不确定性任务"]
+            PAT_THINK["Extended Thinking<br/>深度思考模式<br/>thinking tokens 内部推理<br/>Sonnet/Opus 原生支持"]
         end
 
-        CLI_ENTRY --> MAIN_PARSE --> RUN_FUNC --> CONFIG_LOAD
-        CONFIG_LOAD --> PREFETCH --> PERM_INIT --> MCP_CONNECT --> SESSION_RESTORE
-
-        MODE_SWITCH{"运行模式?"}
-        SESSION_RESTORE --> MODE_SWITCH
-        HEADLESS_MODE["Headless 无头模式<br/>--print / 管道输入"]
-        TUI_MODE["TUI 交互模式<br/>Ink React 终端 UI"]
-        MODE_SWITCH -->|"非交互"| HEADLESS_MODE
-        MODE_SWITCH -->|"交互"| TUI_MODE
-    end
-
-    %% ============================================================
-    %% 03 Agentic Loop 核心循环
-    %% ============================================================
-    subgraph AGENTIC_LOOP["03 Agentic Loop 核心循环"]
-        direction TB
-        LOOP_START["while 循环启动<br/>async generator 异步迭代"]
-        API_CALL["调用 Anthropic Messages API<br/>SSE 流式传输"]
-        STREAM_PARSE["流式解析响应<br/>逐 token 输出"]
-
-        STOP_CHECK{"stop_reason<br/>停止原因?"}
-        END_TURN["end_turn<br/>对话结束,输出最终结果"]
-        TOOL_USE["tool_use<br/>LLM 决定调用工具"]
-        MAX_TOKENS["max_tokens<br/>达到上限,截断续写"]
-
-        TOOL_EXEC_ENTRY["进入工具执行流程"]
-        TOOL_RESULT["tool_result 工具结果<br/>注入 messages 数组<br/>作为下一轮 LLM 输入"]
-
-        BUDGET_CTRL["预算控制<br/>最大轮次 / 最大费用<br/>AbortController 中断"]
-        PROMPT_CACHE["Prompt Caching<br/>缓存不变部分,降低 90% token 费用"]
-
-        LOOP_START --> API_CALL --> STREAM_PARSE --> STOP_CHECK
-        STOP_CHECK -->|"end_turn"| END_TURN
-        STOP_CHECK -->|"tool_use"| TOOL_USE --> TOOL_EXEC_ENTRY
-        STOP_CHECK -->|"max_tokens"| MAX_TOKENS --> API_CALL
-        TOOL_EXEC_ENTRY --> TOOL_RESULT --> API_CALL
-        BUDGET_CTRL -.->|"监控"| LOOP_START
-        PROMPT_CACHE -.->|"优化"| API_CALL
-    end
-
-    %% ============================================================
-    %% 04 工具系统
-    %% ============================================================
-    subgraph TOOL_SYSTEM["04 工具系统"]
-        direction TB
-        subgraph BUILTIN_TOOLS["20+ 内置工具"]
+        subgraph CHALLENGES["工程挑战"]
             direction LR
-            CMD_TOOLS["命令执行<br/>Bash"]
-            FILE_TOOLS["文件操作<br/>Read / Write / Edit"]
-            SEARCH_TOOLS["搜索<br/>Glob / Grep<br/>ripgrep 加速"]
-            SUB_TOOLS["子任务<br/>Agent / Task*"]
-            NET_TOOLS["网络<br/>WebFetch / WebSearch"]
-            OTHER_TOOLS["其他<br/>Notebook / AskUser<br/>Worktree / Config"]
+            CH_STOP["终止控制<br/>何时停止循环"]
+            CH_CTX["上下文管理<br/>窗口有限如何保持信息"]
+            CH_ERR["错误恢复<br/>工具失败后如何处理"]
         end
 
-        subgraph TOOL_LIFECYCLE["工具生命周期 - 7步"]
-            direction LR
-            T_REG["注册"]
-            T_DESC["描述生成"]
-            T_SELECT["LLM 选择"]
-            T_VALID["参数校验"]
-            T_PERM["权限检查"]
-            T_EXEC["执行"]
-            T_RES["返回结果"]
-            T_REG --> T_DESC --> T_SELECT --> T_VALID --> T_PERM --> T_EXEC --> T_RES
-        end
-
-        MCP_TOOLS_REF["MCP 外部工具<br/>mcp__服务名__工具名"]
+        PAT_REACT --> PAT_PLAN --> PAT_REFLECT
     end
 
     %% ============================================================
-    %% 05 权限系统
+    %% 03 工具使用演进
     %% ============================================================
-    subgraph PERM_SYSTEM["05 权限系统"]
+    subgraph PHASE3["03 工具使用四代演进"]
         direction TB
-        CAN_USE["canUseTool 权限检查入口"]
-        WHITELIST["白名单检查<br/>allowedTools / Always Allow 规则"]
-        BLACKLIST["黑名单检查<br/>disallowedTools 绝对禁止"]
-
-        subgraph PERM_MODES["4种权限模式"]
-            direction LR
-            P_DEFAULT["default 默认<br/>危险操作需人工确认"]
-            P_PLAN["plan 计划<br/>纯只读,禁止修改"]
-            P_BYPASS["bypass 跳过<br/>所有操作直接放行<br/>仅限沙箱环境"]
-            P_AUTO["auto 自动<br/>规则引擎判断<br/>高危仍需确认"]
-        end
-
-        USER_CONFIRM["用户确认弹窗<br/>Allow / Deny / Always Allow"]
-        PERM_DENIAL["拒绝记录追踪<br/>反馈给 LLM 避免重复尝试"]
-
-        CAN_USE --> WHITELIST -->|"未匹配"| BLACKLIST -->|"未匹配"| PERM_MODES
-        WHITELIST -->|"命中白名单"| ALLOW_RESULT["放行"]
-        BLACKLIST -->|"命中黑名单"| DENY_RESULT["拒绝"]
-        PERM_MODES -->|"需确认"| USER_CONFIRM
-        USER_CONFIRM -->|"用户拒绝"| PERM_DENIAL
-    end
-
-    %% ============================================================
-    %% 06 System Prompt 系统提示词
-    %% ============================================================
-    subgraph SYS_PROMPT["06 System Prompt 系统提示词"]
-        direction TB
-        subgraph PROMPT_LAYERS["5层架构 - 由静到动"]
+        subgraph TOOL_GENS["四代工具协议"]
             direction TB
-            L1["Layer 1: 核心指令<br/>不可变的角色定义与安全规则"]
-            L2["Layer 2: 用户上下文<br/>CLAUDE.md 多级加载<br/>全局 > 项目 > 子目录"]
-            L3["Layer 3: 系统上下文<br/>git 状态 / OS / 日期 / 工作目录"]
-            L4["Layer 4: 自定义追加内容"]
-            L5["Layer 5: 动态内容<br/>Memory / Skills / MCP 工具描述"]
-            L1 --> L2 --> L3 --> L4 --> L5
+            TG1["第1代: Prompt Hack<br/>在提示词中描述工具<br/>正则解析 LLM 输出<br/>不可靠/易出错"]
+            TG2["第2代: Function Calling<br/>OpenAI 结构化工具调用<br/>JSON Schema 参数定义<br/>可靠的工具选择"]
+            TG3["第3代: Assistants + MCP<br/>内置工具 + 标准协议<br/>MCP: Tools/Resources/Prompts<br/>工具生态统一"]
+            TG4["第4代: A2A 协议<br/>Agent 间直接通信<br/>Agent 即服务<br/>跨平台 Agent 互联"]
+            TG1 -->|"结构化"| TG2 -->|"标准化"| TG3 -->|"互联化"| TG4
         end
-        TOKEN_BUDGET["Token 预算管理<br/>按优先级截断,保证核心指令完整"]
+
+        subgraph TOOL_BEST["工具设计最佳实践"]
+            direction LR
+            TB_NAME["清晰命名<br/>动词+名词"]
+            TB_DESC["详细描述<br/>LLM 理解用"]
+            TB_PARAM["严格参数<br/>JSON Schema 约束"]
+            TB_ERR["优雅错误<br/>人类可读信息"]
+        end
     end
 
     %% ============================================================
-    %% 07 UI 层
+    %% 04 Skills 技能架构
     %% ============================================================
-    subgraph UI_LAYER["07 UI 渲染层"]
+    subgraph PHASE4["04 Skills 技能架构"]
         direction TB
-        INK_ENGINE["Ink 渲染引擎<br/>React 18 + Yoga Flexbox<br/>终端 UI 框架"]
+        SKILL_DIFF["从 Tool 到 Skill 的跃迁<br/>Tool: 单一原子操作<br/>Skill: 包含策略+上下文+多步骤"]
 
-        subgraph UI_MODES["两种模式"]
+        subgraph SKILL_PARADIGMS["3种 Skill 范式"]
             direction LR
-            UI_TUI["TUI 交互模式<br/>消息流 / 流式输出<br/>工具卡片 / 权限弹窗"]
-            UI_HEADLESS["Headless 模式<br/>纯 stdout / CI/CD 友好"]
+            SP_PROMPT["Prompt-as-Skill<br/>提示词即技能<br/>CLAUDE.md / SKILL.md<br/>最轻量"]
+            SP_PLUGIN["Plugin-as-Skill<br/>插件即技能<br/>MCP Server 封装<br/>可复用"]
+            SP_AGENT["Agent-as-Skill<br/>Agent 即技能<br/>子 Agent 作为技能<br/>最强大"]
         end
 
-        subgraph OUTPUT_FMT["3种输出格式"]
+        subgraph SKILL_LIFECYCLE["Skill 生命周期"]
             direction LR
-            FMT_TEXT["text 人类可读"]
-            FMT_JSON["json 结构化"]
-            FMT_STREAM["stream-json NDJSON 实时流"]
+            SL_DISC["Discovery<br/>发现可用技能"]
+            SL_SELECT["Selection<br/>LLM 选择技能"]
+            SL_INJECT["Injection<br/>注入上下文"]
+            SL_EXEC["Execution<br/>执行技能"]
+            SL_FEED["Feedback<br/>结果反馈"]
+            SL_DISC --> SL_SELECT --> SL_INJECT --> SL_EXEC --> SL_FEED
         end
+
+        subgraph SKILL_COMPOSE["Skill 组合策略"]
+            direction LR
+            SC_SERIAL["串行组合<br/>A > B > C"]
+            SC_PARALLEL["并行组合<br/>A + B + C 同时"]
+            SC_COND["条件组合<br/>if X then A else B"]
+        end
+
+        SKILL_DIFF --> SKILL_PARADIGMS
     end
 
     %% ============================================================
-    %% 08 会话管理
+    %% 05 多 Agent 团队
     %% ============================================================
-    subgraph SESSION_MGT["08 会话管理"]
+    subgraph PHASE5["05 Multi-Agent 团队协作"]
         direction TB
-        SESSION_STORE["本地持久化存储<br/>~/.claude/projects/hash/id.jsonl"]
-        SESSION_RECOVERY["会话恢复<br/>--resume 恢复指定会话<br/>--continue 继续上次<br/>--fork 分叉新会话"]
-        CTX_COMPRESS["上下文压缩<br/>token 达到窗口 ~80% 时触发<br/>LLM 生成摘要替换历史消息"]
+        MA_WHY["单 Agent 瓶颈<br/>上下文窗口有限 / 专业度不足<br/>长任务易出错 / 无法并行"]
 
-        SESSION_STORE --> SESSION_RECOVERY
+        subgraph MA_COMM["4种通信模式"]
+            direction LR
+            MC_HANDOFF["Handoff 交接<br/>A 完成后交给 B<br/>串行流水线"]
+            MC_ORCH["Orchestrator 编排<br/>中央调度器分配任务<br/>收集结果汇总"]
+            MC_P2P["Peer-to-Peer 对等<br/>Agent 间直接通信<br/>去中心化"]
+            MC_BROADCAST["Broadcast 广播<br/>一对多发布/订阅"]
+        end
+
+        subgraph MA_STATE["状态共享策略"]
+            direction LR
+            MS_FILE["共享文件系统<br/>Git Worktree"]
+            MS_MSG["消息传递<br/>结构化消息"]
+            MS_BOARD["黑板模式<br/>共享状态存储"]
+            MS_EVENT["事件总线<br/>解耦通信"]
+        end
+
+        subgraph MA_IMPL["产品实现案例"]
+            direction LR
+            MI_CC["Claude Code<br/>嵌套 SubAgent<br/>进程模型"]
+            MI_OAI["OpenAI Agents SDK<br/>Handoff 函数<br/>Runner 编排"]
+            MI_CREW["CrewAI<br/>角色+任务+流程<br/>高度抽象"]
+        end
+
+        MA_WHY --> MA_COMM
     end
 
     %% ============================================================
-    %% 09 MCP 集成
+    %% 06 编排模式
     %% ============================================================
-    subgraph MCP_INTEGRATION["09 MCP 协议集成"]
+    subgraph PHASE6["06 六大编排模式"]
         direction TB
-        MCP_PROTO["MCP - Model Context Protocol<br/>AI 工具的 USB 接口标准<br/>JSON-RPC 2.0"]
+        subgraph ORCH_PATTERNS["从简单到复杂"]
+            direction TB
+            OP_CHAIN["Prompt Chain 提示链<br/>固定步骤串行执行<br/>A > B > C > D<br/>最简单/可预测"]
+            OP_ROUTER["Router 路由<br/>根据输入选择分支<br/>if 类型A then Agent1<br/>适合分类分发"]
+            OP_PIPE["Pipeline 管道<br/>数据流过处理器链<br/>可插拔/可复用<br/>适合数据处理"]
+            OP_DAG["DAG 有向无环图<br/>任务依赖关系图<br/>自动并行无依赖节点<br/>LangGraph 核心模型"]
+            OP_SM["State Machine 状态机<br/>显式状态+转移规则<br/>适合复杂交互流程<br/>可控性最强"]
+            OP_SWARM["Swarm 群体智能<br/>自组织/无中心<br/>Agent 自主协商<br/>最灵活/最难调试"]
 
-        subgraph MCP_TRANSPORT["传输方式"]
-            direction LR
-            MCP_STDIO["stdio 本地子进程"]
-            MCP_HTTP["Streamable HTTP 远程"]
+            OP_CHAIN -->|"增加分支"| OP_ROUTER
+            OP_ROUTER -->|"增加流水线"| OP_PIPE
+            OP_PIPE -->|"增加并行"| OP_DAG
+            OP_DAG -->|"增加状态"| OP_SM
+            OP_SM -->|"去中心化"| OP_SWARM
         end
 
-        subgraph MCP_CAPS["3种能力"]
-            direction LR
-            MCP_CAP_TOOLS["Tools 工具调用"]
-            MCP_CAP_RES["Resources 资源读取"]
-            MCP_CAP_PROMPT["Prompts 提示模板"]
-        end
-
-        MCP_NAMING["工具命名规范<br/>mcp__服务名__工具名"]
-        MCP_HANDSHAKE["初始化握手<br/>initialize > tools/list"]
+        ORCH_OBSERVE["可观测性<br/>Trace / Span 追踪<br/>每步决策可审计"]
     end
 
     %% ============================================================
-    %% 10 Agent 子系统
+    %% 07 框架对比
     %% ============================================================
-    subgraph AGENT_SUB["10 Agent 子系统"]
+    subgraph PHASE7["07 主流框架对比"]
         direction TB
-        NESTED_AGENT["嵌套 Agent 模式<br/>主 Agent 生成子 Agent<br/>类似操作系统进程模型"]
-
-        subgraph AGENT_TYPES["Agent 类型"]
+        subgraph FRAMEWORKS["6大框架"]
             direction LR
-            AG_GENERAL["通用型<br/>全部工具 / Sonnet"]
-            AG_EXPLORE["Explore 探索<br/>只读 / Haiku 降级省成本"]
-            AG_PLAN["Plan 规划<br/>只读 / Sonnet"]
-            AG_CUSTOM["Custom 自定义<br/>自定义提示词"]
+            FW_CC["Claude Code<br/>嵌套 Agent + 工具<br/>CLI 优先/单进程"]
+            FW_OAI["OpenAI Agents SDK<br/>Handoff + Guardrails<br/>Python SDK"]
+            FW_LG["LangGraph<br/>图编排 + 状态机<br/>最灵活/学习曲线陡"]
+            FW_CREW["CrewAI<br/>角色+任务+流程<br/>最高层抽象"]
         end
 
-        GIT_WORKTREE["Git Worktree 隔离<br/>子 Agent 独立工作目录<br/>支持并行文件修改"]
-        MAP_REDUCE["MapReduce 并行模式<br/>拆分任务 > 并行执行 > 汇总结果"]
+        subgraph FW_CHOOSE["选择决策树"]
+            direction TB
+            FWC_SIMPLE["简单任务?<br/>Prompt Chain 即可"]
+            FWC_TOOL["需要工具调用?<br/>Claude Code / Agents SDK"]
+            FWC_MULTI["需要多 Agent?<br/>LangGraph / CrewAI"]
+            FWC_CUSTOM["需要深度定制?<br/>LangGraph"]
+            FWC_SIMPLE --> FWC_TOOL --> FWC_MULTI --> FWC_CUSTOM
+        end
     end
 
     %% ============================================================
-    %% 11 插件与 Hooks
+    %% 08 未来趋势
     %% ============================================================
-    subgraph PLUGIN_HOOKS["11 插件与 Hooks"]
+    subgraph PHASE8["08 未来趋势"]
         direction TB
-        PLUGINS["插件 = MCP Server<br/>user / project / local 三级作用域"]
-
-        subgraph HOOK_EVENTS["Hooks 生命周期事件"]
+        subgraph TRENDS["三大确定性趋势"]
             direction LR
-            H_PRE["PreToolUse<br/>工具执行前拦截"]
-            H_POST["PostToolUse<br/>工具执行后处理"]
-            H_PROMPT["UserPromptSubmit<br/>用户提交时触发"]
-            H_STOP["Stop<br/>会话结束时触发"]
+            TR_ASYNC["异步 Agent<br/>后台执行/完成通知<br/>从实时助手到异步同事<br/>Cursor BG Agent / Codex"]
+            TR_CONNECT["Agent 生态互联<br/>MCP 工具互联<br/>A2A Agent 互联<br/>Agent 互联网"]
+            TR_NATIVE["Agent 原生应用<br/>意图驱动而非操作驱动<br/>适应性界面 / 持续后台<br/>协作式交互"]
         end
 
-        SANDBOX["沙箱安全机制<br/>macOS Seatbelt 限制<br/>网络/文件系统隔离"]
-        AUTO_MEMORY["Auto Memory<br/>MEMORY.md 跨会话持久记忆"]
-    end
-
-    %% ============================================================
-    %% 12 技术栈与性能
-    %% ============================================================
-    subgraph TECH_STACK["12 技术栈与性能优化"]
-        direction TB
-        subgraph CORE_TECH["核心技术选型"]
+        subgraph DIRECTIONS["五个发展方向"]
             direction LR
-            NODEJS["Node.js 18+ ESM"]
-            COMMANDER["Commander.js 命令行"]
-            INK_REACT["Ink + React 18 终端UI"]
-            ANTHROPIC_API["Anthropic Messages API"]
-        end
-
-        subgraph PERF_OPT["关键性能优化"]
-            direction LR
-            PERF_STREAM["SSE 流式输出<br/>首 token 即响应"]
-            PERF_PREFETCH["启动并行预取"]
-            PERF_RG["ripgrep 原生搜索"]
-            PERF_CACHE["Prompt Caching<br/>缓存省 90% 费用"]
-            PERF_DOWNGRADE["子Agent 模型降级<br/>Haiku 省成本"]
+            DIR_GUI["Computer Use<br/>GUI 操作能力"]
+            DIR_MEM["记忆系统成熟<br/>工作/情景/语义/程序记忆"]
+            DIR_SAFE["安全与对齐<br/>沙箱/权限/Guardrails"]
+            DIR_EVAL["评估基准<br/>SWE-bench / GAIA"]
+            DIR_OS["Agent OS<br/>Agent 即操作系统"]
         end
     end
 
     %% ============================================================
-    %% 模块间连接 - 主流程
+    %% 主流程连接线 - 四阶段演进
     %% ============================================================
 
-    %% 用户 -> 启动
-    USER --> CLI_ENTRY
+    %% 阶段1到2: 有了 Agent 范式,需要推理模式
+    P1_AGENT -->|"Agent 如何推理?"| PAT_REACT
 
-    %% 启动 -> UI
-    HEADLESS_MODE --> UI_HEADLESS
-    TUI_MODE --> UI_TUI
+    %% 阶段2到3: 推理需要工具
+    PATTERNS -->|"推理需要行动能力"| TG2
 
-    %% 启动 -> 核心循环
-    MODE_SWITCH --> LOOP_START
+    %% 阶段3到4: 工具升级为技能
+    TG3 -->|"从工具到技能"| SKILL_DIFF
 
-    %% 核心循环 -> System Prompt
-    API_CALL -.->|"构建提示词"| SYS_PROMPT
+    %% 阶段4到5: 单 Agent 遇到瓶颈
+    SKILL_COMPOSE -->|"单 Agent 能力天花板"| MA_WHY
 
-    %% 核心循环 -> 工具系统
-    TOOL_EXEC_ENTRY --> T_VALID
+    %% 阶段5到6: 多 Agent 需要编排
+    MA_COMM -->|"如何协调多 Agent?"| ORCH_PATTERNS
 
-    %% 工具 -> 权限检查
-    T_PERM --> CAN_USE
+    %% 阶段6到7: 编排落地为框架
+    OP_DAG -->|"框架实现"| FRAMEWORKS
 
-    %% 工具 -> MCP
-    MCP_TOOLS_REF --> MCP_NAMING
+    %% 阶段7到8: 框架走向未来
+    FRAMEWORKS -->|"下一步演进"| TRENDS
 
-    %% 权限 -> UI 确认
-    USER_CONFIRM -.->|"弹窗展示"| UI_TUI
+    %% 四层模型贯穿全流程
+    AL_LLM -.->|"驱动推理"| PATTERNS
+    AL_TOOLS -.->|"对应工具层"| TOOL_GENS
+    AL_SKILLS -.->|"对应技能层"| SKILL_PARADIGMS
+    AL_ORCH -.->|"对应编排层"| ORCH_PATTERNS
 
-    %% 循环 -> 会话管理
-    END_TURN -.->|"保存会话"| SESSION_STORE
-    API_CALL -.->|"token 监控"| CTX_COMPRESS
+    %% 工具到 MCP 标准
+    TG3 -.->|"MCP 标准"| SP_PLUGIN
 
-    %% 启动 -> MCP 连接
-    MCP_CONNECT --> MCP_HANDSHAKE
+    %% 反思模式到记忆
+    PAT_REFLECT -.->|"经验积累"| DIR_MEM
 
-    %% 工具 -> 子 Agent
-    SUB_TOOLS --> NESTED_AGENT
+    %% 安全贯穿始终
+    DIR_SAFE -.->|"安全约束"| MA_STATE
 
-    %% 子 Agent -> 自己的循环
-    NESTED_AGENT -.->|"启动子循环"| LOOP_START
-
-    %% MCP -> 插件
-    MCP_INTEGRATION -.->|"插件即 MCP"| PLUGINS
-
-    %% Hooks -> 工具执行
-    H_PRE -.->|"拦截/修改"| T_EXEC
-    H_POST -.->|"后处理"| T_RES
-
-    %% Memory -> Prompt
-    AUTO_MEMORY -.->|"注入动态层"| L5
-
-    %% 权限拒绝 -> 反馈循环
-    PERM_DENIAL -.->|"反馈给 LLM"| AGENTIC_LOOP
-
-    %% 技术栈 -> 底座
-    TECH_STACK -.->|"技术底座"| OVERVIEW
+    %% Agent OS 是终极愿景
+    DIR_OS -.->|"终极愿景"| TR_NATIVE
                 </pre>
             </div>
         </div>
