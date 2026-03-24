@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Architecture Flowchart</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            overflow: hidden;
+            height: 100vh;
+        }
+        #toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #333;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #toolbar h1 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #8ab4f8;
+            margin-right: auto;
+        }
+        #toolbar button {
+            background: #2a2a4a;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        #toolbar button:hover { background: #3a3a5a; color: #fff; border-color: #666; }
+        #toolbar .zoom-info {
+            font-size: 12px;
+            color: #888;
+            min-width: 50px;
+            text-align: center;
+        }
+        #toolbar .hint {
+            font-size: 11px;
+            color: #666;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+            padding-top: 44px;
+            cursor: grab;
+        }
+        #container.dragging { cursor: grabbing; }
+        #mermaid-wrapper {
+            transform-origin: 0 0;
+            position: absolute;
+            top: 44px;
+            left: 0;
+        }
+        #mermaid-diagram {
+            padding: 40px;
+        }
+        /* Mermaid style overrides for dark theme */
+        #mermaid-diagram .node rect,
+        #mermaid-diagram .node circle,
+        #mermaid-diagram .node ellipse,
+        #mermaid-diagram .node polygon { stroke-width: 2px; }
+        #mermaid-diagram .cluster rect { rx: 8; ry: 8; }
+
+        /* Loading state */
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #8ab4f8;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <h1>Claude Code Architecture</h1>
+        <span class="hint">Scroll to zoom | Drag to pan</span>
+        <button onclick="zoomIn()">+ Zoom In</button>
+        <button onclick="zoomOut()">- Zoom Out</button>
+        <span class="zoom-info" id="zoomLevel">100%</span>
+        <button onclick="resetView()">Reset</button>
+        <button onclick="fitToScreen()">Fit</button>
+    </div>
+    <div id="container">
+        <div id="mermaid-wrapper">
+            <div id="mermaid-diagram">
+                <pre class="mermaid">
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#4A90D9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2C5F8A', 'lineColor': '#5A6A7A', 'secondaryColor': '#2a2a4a', 'tertiaryColor': '#1a3a2a', 'fontSize': '14px', 'clusterBkg': '#1e1e3a', 'clusterBorder': '#444'}}}%%
+
+flowchart TB
+    %% ============================================================
+    %% 01-overview: Overall Architecture
+    %% ============================================================
+    subgraph OVERVIEW["01 Overall Architecture"]
+        direction TB
+        USER["User Input<br/>(Natural Language / Command)"]
+        ARCH["Claude Code Architecture<br/>CLI Shell + Agentic Loop Core<br/>+ Tool System + Permission Model"]
+    end
+
+    %% ============================================================
+    %% 02-startup: Startup Flow
+    %% ============================================================
+    subgraph STARTUP["02 Startup Flow"]
+        direction TB
+        CLI_ENTRY["cli.js Entry<br/>ESM single-bundle"]
+        TOP_ENTRY["$E_&#40;&#41; Top-level Entry"]
+        MAIN_PARSE["main&#40;&#41;/KE_&#40;&#41;<br/>Commander.js CLI Parsing"]
+        RUN_FUNC["_E_&#40;&#41; Run Function"]
+
+        subgraph SETUP["setup&#40;&#41; Initialization"]
+            direction TB
+            CONFIG_LOAD["AE_&#40;&#41; Config Loading<br/>7-level Priority<br/>CLI > env > settings > project<br/>> user > CLAUDE.md > defaults"]
+            PREFETCH["Hu8&#40;&#41; Parallel Prefetch<br/>API / Model / User Data"]
+            PERM_INIT["Zs1&#40;&#41; Permission Init<br/>Select from 4 Modes"]
+            MCP_CONNECT["MCP Server Connect"]
+            SESSION_RESTORE["Session Restore<br/>--resume / --continue"]
+        end
+
+        CLI_ENTRY --> TOP_ENTRY --> MAIN_PARSE --> RUN_FUNC --> CONFIG_LOAD
+        CONFIG_LOAD --> PREFETCH --> PERM_INIT --> MCP_CONNECT --> SESSION_RESTORE
+
+        MODE_SWITCH{"Run Mode?"}
+        SESSION_RESTORE --> MODE_SWITCH
+        HEADLESS_MODE["Headless Mode<br/>--print / pipe input"]
+        TUI_MODE["TUI Interactive Mode<br/>Ink React Terminal"]
+        MODE_SWITCH -->|"Non-interactive"| HEADLESS_MODE
+        MODE_SWITCH -->|"Interactive"| TUI_MODE
+    end
+
+    %% ============================================================
+    %% 03-agentic-loop: Core Loop
+    %% ============================================================
+    subgraph AGENTIC_LOOP["03 Agentic Loop - Core"]
+        direction TB
+        LOOP_START["while Loop Start<br/>async generator th&#40;&#41;"]
+        API_CALL["Anthropic Messages API<br/>SSE Streaming"]
+        STREAM_PARSE["Stream Parse Response<br/>content_block_delta"]
+
+        STOP_CHECK{"stop_reason?"}
+        END_TURN["end_turn<br/>Conversation End"]
+        TOOL_USE["tool_use<br/>Need Tool Call"]
+        MAX_TOKENS["max_tokens<br/>Truncate & Continue"]
+
+        TOOL_EXEC_ENTRY["Tool Execution Entry"]
+        TOOL_RESULT["tool_result<br/>Inject into messages"]
+
+        BUDGET_CTRL["Budget Control<br/>maxTurns / maxBudgetUsd<br/>AbortController"]
+        PROMPT_CACHE["Prompt Caching<br/>90% Token Cost Reduction"]
+
+        LOOP_START --> API_CALL --> STREAM_PARSE --> STOP_CHECK
+        STOP_CHECK -->|"end_turn"| END_TURN
+        STOP_CHECK -->|"tool_use"| TOOL_USE --> TOOL_EXEC_ENTRY
+        STOP_CHECK -->|"max_tokens"| MAX_TOKENS --> API_CALL
+        TOOL_EXEC_ENTRY --> TOOL_RESULT --> API_CALL
+        BUDGET_CTRL -.->|"Monitor"| LOOP_START
+        PROMPT_CACHE -.->|"Optimize"| API_CALL
+    end
+
+    %% ============================================================
+    %% 04-tool-system: Tool System
+    %% ============================================================
+    subgraph TOOL_SYSTEM["04 Tool System"]
+        direction TB
+        subgraph BUILTIN_TOOLS["20+ Built-in Tools"]
+            direction LR
+            CMD_TOOLS["Command Exec<br/>Bash"]
+            FILE_TOOLS["File Ops<br/>Read / Write / Edit"]
+            SEARCH_TOOLS["Search<br/>Glob / Grep"]
+            SUB_TOOLS["Sub-tasks<br/>Agent / Task*"]
+            NET_TOOLS["Network<br/>WebFetch / WebSearch"]
+            OTHER_TOOLS["Others<br/>Notebook / AskUser<br/>Worktree / Config"]
+        end
+
+        subgraph TOOL_LIFECYCLE["Tool Lifecycle"]
+            direction LR
+            T_REG["Register"]
+            T_DESC["Describe"]
+            T_SELECT["LLM Select"]
+            T_VALID["Validate"]
+            T_PERM["Permission"]
+            T_EXEC["Execute"]
+            T_RES["Result"]
+            T_REG --> T_DESC --> T_SELECT --> T_VALID --> T_PERM --> T_EXEC --> T_RES
+        end
+
+        VENDOR_DEPS["Vendor Dependencies<br/>ripgrep / tree-sitter-bash"]
+        MCP_TOOLS_REF["MCP External Tools<br/>mcp__server__tool"]
+    end
+
+    %% ============================================================
+    %% 05-permission-system: Permission System
+    %% ============================================================
+    subgraph PERM_SYSTEM["05 Permission System"]
+        direction TB
+        CAN_USE["canUseTool&#40;&#41; Entry"]
+        WHITELIST["alwaysAllowRules<br/>Whitelist Check"]
+        BLACKLIST["disallowedTools<br/>Blacklist Check"]
+
+        subgraph PERM_MODES["4 Permission Modes"]
+            direction LR
+            P_DEFAULT["default<br/>Confirm Dangerous"]
+            P_PLAN["plan<br/>Read-only"]
+            P_BYPASS["bypass<br/>Skip All Checks"]
+            P_AUTO["auto<br/>Rule Engine"]
+        end
+
+        USER_CONFIRM["User Confirmation UI<br/>Allow / Deny / Always Allow"]
+        PERM_DENIAL["permissionDenials<br/>Denial Tracking"]
+        PERM_CONFIG["Config Sources<br/>settings.json<br/>--dangerously-skip-permissions<br/>CLAUDE.md"]
+
+        CAN_USE --> WHITELIST -->|"No match"| BLACKLIST -->|"No match"| PERM_MODES
+        WHITELIST -->|"Match"| ALLOW_RESULT["ALLOW"]
+        BLACKLIST -->|"Match"| DENY_RESULT["DENY"]
+        PERM_MODES -->|"Need confirm"| USER_CONFIRM
+        USER_CONFIRM -->|"Deny"| PERM_DENIAL
+    end
+
+    %% ============================================================
+    %% 06-system-prompt: System Prompt
+    %% ============================================================
+    subgraph SYS_PROMPT["06 System Prompt"]
+        direction TB
+        subgraph PROMPT_LAYERS["5-Layer Architecture"]
+            direction TB
+            L1["Layer 1: Core Instructions<br/>Immutable Rules"]
+            L2["Layer 2: User Context<br/>CLAUDE.md Multi-level"]
+            L3["Layer 3: System Context<br/>git / OS / date / cwd"]
+            L4["Layer 4: Custom Append"]
+            L5["Layer 5: Dynamic Content<br/>Memory / Skills / MCP"]
+            L1 --> L2 --> L3 --> L4 --> L5
+        end
+        TOKEN_BUDGET["Token Budget Mgmt<br/>Priority Truncation"]
+        CLAUDE_MD["CLAUDE.md Loading<br/>global > project > subdir"]
+    end
+
+    %% ============================================================
+    %% 07-ui-layer: UI Layer
+    %% ============================================================
+    subgraph UI_LAYER["07 UI Layer"]
+        direction TB
+        INK_ENGINE["Ink Engine<br/>React 18 for CLI<br/>Yoga Flexbox"]
+
+        subgraph UI_MODES["Two Modes"]
+            direction LR
+            UI_TUI["Interactive TUI<br/>Messages / Streaming<br/>Tool Cards / Permission"]
+            UI_HEADLESS["Headless<br/>Pure stdout<br/>CI/CD Friendly"]
+        end
+
+        subgraph OUTPUT_FMT["3 Output Formats"]
+            direction LR
+            FMT_TEXT["text"]
+            FMT_JSON["json"]
+            FMT_STREAM["stream-json<br/>NDJSON"]
+        end
+    end
+
+    %% ============================================================
+    %% 08-session-management: Session Management
+    %% ============================================================
+    subgraph SESSION_MGT["08 Session Management"]
+        direction TB
+        SESSION_STORE["Local Storage<br/>~/.claude/projects/hash/id.jsonl"]
+        SESSION_RECOVERY["Session Recovery<br/>--resume / --continue / --fork"]
+        CTX_COMPRESS["Context Compression<br/>LLM Summary Method<br/>Trigger at ~80% Window"]
+        COMPACT_BOUNDARY["compact_boundary Marker<br/>Summary Replaces History"]
+
+        SESSION_STORE --> SESSION_RECOVERY
+        CTX_COMPRESS --> COMPACT_BOUNDARY
+    end
+
+    %% ============================================================
+    %% 09-mcp-integration: MCP Integration
+    %% ============================================================
+    subgraph MCP_INTEGRATION["09 MCP Integration"]
+        direction TB
+        MCP_PROTO["MCP Protocol<br/>Model Context Protocol<br/>JSON-RPC 2.0"]
+
+        subgraph MCP_TRANSPORT["Transport"]
+            direction LR
+            MCP_STDIO["stdio<br/>Local Subprocess"]
+            MCP_HTTP["Streamable HTTP<br/>Remote Service"]
+        end
+
+        subgraph MCP_CAPS["3 Capabilities"]
+            direction LR
+            MCP_CAP_TOOLS["Tools"]
+            MCP_CAP_RES["Resources"]
+            MCP_CAP_PROMPT["Prompts"]
+        end
+
+        MCP_NAMING["Tool Naming<br/>mcp__serverName__toolName"]
+        MCP_HANDSHAKE["Init Handshake<br/>initialize -> tools/list"]
+    end
+
+    %% ============================================================
+    %% 10-agent-subsystem: Agent Subsystem
+    %% ============================================================
+    subgraph AGENT_SUB["10 Agent Subsystem"]
+        direction TB
+        NESTED_AGENT["Nested Agent Pattern<br/>Parent Spawns Children<br/>Like OS Process Model"]
+
+        subgraph AGENT_TYPES["Agent Types"]
+            direction LR
+            AG_GENERAL["General<br/>Full Tools / Sonnet"]
+            AG_EXPLORE["Explore<br/>Read-only / Haiku"]
+            AG_PLAN["Plan<br/>Read-only / Sonnet"]
+            AG_CUSTOM["Custom<br/>Custom Prompt"]
+        end
+
+        GIT_WORKTREE["Git Worktree Isolation<br/>Parallel File Modification"]
+        SEND_MSG["SendMessage<br/>Inter-Agent Communication"]
+        MAP_REDUCE["MapReduce Pattern<br/>Divide + Aggregate"]
+    end
+
+    %% ============================================================
+    %% 11-plugin-and-hooks: Plugins & Hooks
+    %% ============================================================
+    subgraph PLUGIN_HOOKS["11 Plugins & Hooks"]
+        direction TB
+        PLUGINS["Plugins = MCP Servers<br/>user / project / local scope"]
+
+        subgraph HOOK_EVENTS["Hook Events"]
+            direction LR
+            H_PRE["PreToolUse"]
+            H_POST["PostToolUse"]
+            H_PROMPT["UserPromptSubmit"]
+            H_STOP["Stop"]
+        end
+
+        SANDBOX["Sandbox Security<br/>macOS Seatbelt<br/>Linux seccomp"]
+        AUTO_MEMORY["Auto Memory<br/>MEMORY.md Persistent"]
+        THINKING["Thinking Mode<br/>adaptive / disabled"]
+    end
+
+    %% ============================================================
+    %% 12-tech-stack: Tech Stack
+    %% ============================================================
+    subgraph TECH_STACK["12 Tech Stack & Performance"]
+        direction TB
+        subgraph CORE_TECH["Core Tech"]
+            direction LR
+            NODEJS["Node.js 18+ ESM"]
+            COMMANDER["Commander.js"]
+            INK_REACT["Ink / React 18"]
+            ZUSTAND["Zustand-like State"]
+            ANTHROPIC_API["Anthropic API<br/>SSE Streaming"]
+        end
+
+        subgraph DESIGN_PATTERNS["6 Design Patterns"]
+            direction LR
+            DP_ASYNC["Async Generator"]
+            DP_EVENT["Event-Driven"]
+            DP_MW["Middleware"]
+            DP_PROMPT["Layered Prompt"]
+            DP_NESTED["Nested Agent"]
+            DP_COMPRESS["Context Compress"]
+        end
+
+        subgraph PERF_OPT["6 Performance Optimizations"]
+            direction LR
+            PERF_STREAM["Streaming TTFT"]
+            PERF_PREFETCH["Parallel Prefetch"]
+            PERF_RG["ripgrep Native"]
+            PERF_BUNDLE["Single Bundle"]
+            PERF_CACHE["Prompt Caching"]
+            PERF_DOWNGRADE["Model Downgrade"]
+        end
+    end
+
+    %% ============================================================
+    %% Main Flow Connections
+    %% ============================================================
+
+    USER --> CLI_ENTRY
+
+    HEADLESS_MODE --> UI_HEADLESS
+    TUI_MODE --> UI_TUI
+
+    MODE_SWITCH --> LOOP_START
+
+    API_CALL -.->|"Build prompt"| SYS_PROMPT
+
+    TOOL_EXEC_ENTRY --> T_VALID
+
+    T_PERM --> CAN_USE
+
+    MCP_TOOLS_REF --> MCP_NAMING
+
+    USER_CONFIRM -.->|"UI Display"| UI_TUI
+
+    END_TURN -.->|"Save session"| SESSION_STORE
+    API_CALL -.->|"Token monitor"| CTX_COMPRESS
+
+    MCP_CONNECT --> MCP_HANDSHAKE
+
+    SUB_TOOLS --> NESTED_AGENT
+
+    NESTED_AGENT -.->|"Sub-loop"| LOOP_START
+
+    MCP_INTEGRATION -.->|"Plugin = MCP"| PLUGINS
+
+    H_PRE -.->|"Intercept"| T_EXEC
+    H_POST -.->|"Post-process"| T_RES
+
+    AUTO_MEMORY -.->|"Inject"| L5
+
+    PERM_DENIAL -.->|"Feedback to LLM"| AGENTIC_LOOP
+
+    TECH_STACK -.->|"Foundation"| OVERVIEW
+                </pre>
+            </div>
+        </div>
+    </div>
+    <div id="loading">Loading diagram...</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>
+        // Pan & Zoom state
+        let scale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let isDragging = false;
+        let startX, startY;
+        const MIN_SCALE = 0.1;
+        const MAX_SCALE = 5;
+        const ZOOM_STEP = 0.15;
+
+        const container = document.getElementById('container');
+        const wrapper = document.getElementById('mermaid-wrapper');
+        const zoomLevel = document.getElementById('zoomLevel');
+        const loading = document.getElementById('loading');
+
+        function updateTransform() {
+            wrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            zoomLevel.textContent = Math.round(scale * 100) + '%';
+        }
+
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'dark',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis',
+                padding: 20,
+                nodeSpacing: 30,
+                rankSpacing: 40
+            },
+            securityLevel: 'loose'
+        });
+
+        mermaid.run().then(() => {
+            loading.style.display = 'none';
+            // Auto fit after render
+            setTimeout(fitToScreen, 100);
+        });
+
+        // Mouse wheel zoom
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = container.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const oldScale = scale;
+            if (e.deltaY < 0) {
+                scale = Math.min(MAX_SCALE, scale * (1 + ZOOM_STEP));
+            } else {
+                scale = Math.max(MIN_SCALE, scale * (1 - ZOOM_STEP));
+            }
+
+            // Zoom toward mouse position
+            translateX = mouseX - (mouseX - translateX) * (scale / oldScale);
+            translateY = mouseY - (mouseY - translateY) * (scale / oldScale);
+
+            updateTransform();
+        }, { passive: false });
+
+        // Mouse drag pan
+        container.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            container.classList.add('dragging');
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateTransform();
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            container.classList.remove('dragging');
+        });
+
+        // Touch support
+        let lastTouchDist = 0;
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                startX = e.touches[0].clientX - translateX;
+                startY = e.touches[0].clientY - translateY;
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+                lastTouchX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                lastTouchY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            }
+        }, { passive: false });
+
+        container.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1 && isDragging) {
+                translateX = e.touches[0].clientX - startX;
+                translateY = e.touches[0].clientY - startY;
+                updateTransform();
+            } else if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+                const oldScale = scale;
+                scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * (dist / lastTouchDist)));
+
+                const rect = container.getBoundingClientRect();
+                const mx = centerX - rect.left;
+                const my = centerY - rect.top;
+                translateX = mx - (mx - translateX) * (scale / oldScale);
+                translateY = my - (my - translateY) * (scale / oldScale);
+
+                lastTouchDist = dist;
+                updateTransform();
+            }
+        }, { passive: false });
+
+        container.addEventListener('touchend', () => { isDragging = false; });
+
+        // Keyboard shortcuts
+        window.addEventListener('keydown', (e) => {
+            if (e.key === '+' || e.key === '=') zoomIn();
+            else if (e.key === '-') zoomOut();
+            else if (e.key === '0') resetView();
+            else if (e.key === 'f' || e.key === 'F') fitToScreen();
+        });
+
+        // Toolbar functions
+        function zoomIn() {
+            const rect = container.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const oldScale = scale;
+            scale = Math.min(MAX_SCALE, scale * (1 + ZOOM_STEP));
+            translateX = cx - (cx - translateX) * (scale / oldScale);
+            translateY = cy - (cy - translateY) * (scale / oldScale);
+            updateTransform();
+        }
+
+        function zoomOut() {
+            const rect = container.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const oldScale = scale;
+            scale = Math.max(MIN_SCALE, scale * (1 - ZOOM_STEP));
+            translateX = cx - (cx - translateX) * (scale / oldScale);
+            translateY = cy - (cy - translateY) * (scale / oldScale);
+            updateTransform();
+        }
+
+        function resetView() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateTransform();
+        }
+
+        function fitToScreen() {
+            const svg = wrapper.querySelector('svg');
+            if (!svg) return;
+            const svgRect = svg.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            // Get actual SVG dimensions at scale=1
+            const actualWidth = svgRect.width / scale;
+            const actualHeight = svgRect.height / scale;
+
+            const padding = 60;
+            const availWidth = containerRect.width - padding * 2;
+            const availHeight = containerRect.height - padding * 2;
+
+            scale = Math.min(availWidth / actualWidth, availHeight / actualHeight, 1.5);
+
+            translateX = (containerRect.width - actualWidth * scale) / 2;
+            translateY = (containerRect.height - actualHeight * scale) / 2;
+
+            updateTransform();
+        }
+    </script>
+</body>
+</html>
