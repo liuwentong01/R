@@ -1,0 +1,366 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4A90D9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2C5F8A', 'lineColor': '#5A6A7A', 'secondaryColor': '#F0F4F8', 'tertiaryColor': '#E8F5E9', 'fontSize': '14px'}}}%%
+
+flowchart TB
+    %% ============================================================
+    %% 01-overview: 整体架构概览
+    %% ============================================================
+    subgraph OVERVIEW["01 整体架构概览"]
+        direction TB
+        USER["用户输入<br/>(自然语言/命令)"]
+        ARCH["Claude Code 架构<br/>CLI Shell + Agentic Loop Core<br/>+ Tool System + Permission Model"]
+    end
+
+    %% ============================================================
+    %% 02-startup: 启动流程
+    %% ============================================================
+    subgraph STARTUP["02 启动流程"]
+        direction TB
+        CLI_ENTRY["cli.js 入口<br/>ESM single-bundle"]
+        TOP_ENTRY["$E_() 顶层入口"]
+        MAIN_PARSE["main()/KE_()<br/>Commander.js 命令行解析"]
+        RUN_FUNC["_E_() run 函数"]
+
+        subgraph SETUP["setup() 初始化"]
+            direction TB
+            CONFIG_LOAD["AE_() 配置加载<br/>7级优先级<br/>CLI > env > settings > project<br/>> user > CLAUDE.md > defaults"]
+            PREFETCH["Hu8() 并行预取<br/>API可用性/模型信息/用户数据"]
+            PERM_INIT["Zs1() 权限初始化<br/>4种模式选择"]
+            MCP_CONNECT["MCP Server 连接"]
+            SESSION_RESTORE["Session 恢复<br/>--resume / --continue"]
+        end
+
+        CLI_ENTRY --> TOP_ENTRY --> MAIN_PARSE --> RUN_FUNC --> CONFIG_LOAD
+        CONFIG_LOAD --> PREFETCH --> PERM_INIT --> MCP_CONNECT --> SESSION_RESTORE
+
+        MODE_SWITCH{"运行模式?"}
+        SESSION_RESTORE --> MODE_SWITCH
+        HEADLESS_MODE["Headless 模式<br/>(--print / 管道输入)"]
+        TUI_MODE["TUI 交互模式<br/>(Ink React 终端)"]
+        MODE_SWITCH -->|"非交互"| HEADLESS_MODE
+        MODE_SWITCH -->|"交互"| TUI_MODE
+    end
+
+    %% ============================================================
+    %% 03-agentic-loop: 核心循环
+    %% ============================================================
+    subgraph AGENTIC_LOOP["03 Agentic Loop 核心循环"]
+        direction TB
+        LOOP_START["while 循环启动<br/>async generator th()"]
+        API_CALL["调用 Anthropic Messages API<br/>SSE 流式传输"]
+        STREAM_PARSE["流式解析响应<br/>content_block_delta"]
+
+        STOP_CHECK{"stop_reason?"}
+        END_TURN["end_turn<br/>对话结束"]
+        TOOL_USE["tool_use<br/>需要调用工具"]
+        MAX_TOKENS["max_tokens<br/>截断续写"]
+
+        TOOL_EXEC_ENTRY["工具执行入口"]
+        TOOL_RESULT["tool_result<br/>注入 messages 数组"]
+
+        BUDGET_CTRL["预算控制<br/>maxTurns / maxBudgetUsd<br/>AbortController"]
+        PROMPT_CACHE["Prompt Caching<br/>减少 90% 重复 token 费用"]
+
+        LOOP_START --> API_CALL --> STREAM_PARSE --> STOP_CHECK
+        STOP_CHECK -->|"end_turn"| END_TURN
+        STOP_CHECK -->|"tool_use"| TOOL_USE --> TOOL_EXEC_ENTRY
+        STOP_CHECK -->|"max_tokens"| MAX_TOKENS --> API_CALL
+        TOOL_EXEC_ENTRY --> TOOL_RESULT --> API_CALL
+        BUDGET_CTRL -.->|"监控"| LOOP_START
+        PROMPT_CACHE -.->|"优化"| API_CALL
+    end
+
+    %% ============================================================
+    %% 04-tool-system: 工具系统
+    %% ============================================================
+    subgraph TOOL_SYSTEM["04 工具系统"]
+        direction TB
+        subgraph BUILTIN_TOOLS["20+ 内置工具"]
+            direction LR
+            CMD_TOOLS["命令执行<br/>Bash"]
+            FILE_TOOLS["文件操作<br/>Read / Write / Edit"]
+            SEARCH_TOOLS["搜索<br/>Glob / Grep"]
+            SUB_TOOLS["子任务<br/>Agent / Task*"]
+            NET_TOOLS["网络<br/>WebFetch / WebSearch"]
+            OTHER_TOOLS["其他<br/>Notebook / AskUser<br/>Worktree / Config"]
+        end
+
+        subgraph TOOL_LIFECYCLE["工具生命周期"]
+            direction LR
+            T_REG["注册<br/>Registration"]
+            T_DESC["描述<br/>Description"]
+            T_SELECT["LLM 选择<br/>Selection"]
+            T_VALID["验证<br/>Validation"]
+            T_PERM["权限检查<br/>Permission"]
+            T_EXEC["执行<br/>Execution"]
+            T_RES["结果<br/>Result"]
+            T_REG --> T_DESC --> T_SELECT --> T_VALID --> T_PERM --> T_EXEC --> T_RES
+        end
+
+        VENDOR_DEPS["Vendor 依赖<br/>ripgrep / tree-sitter-bash<br/>audio-capture"]
+        MCP_TOOLS_REF["MCP 外部工具<br/>mcp__{server}__{tool}"]
+    end
+
+    %% ============================================================
+    %% 05-permission-system: 权限系统
+    %% ============================================================
+    subgraph PERM_SYSTEM["05 权限系统"]
+        direction TB
+        CAN_USE["canUseTool() 入口"]
+        WHITELIST["alwaysAllowRules<br/>白名单检查"]
+        BLACKLIST["disallowedTools<br/>黑名单检查"]
+
+        subgraph PERM_MODES["4种权限模式"]
+            direction LR
+            P_DEFAULT["default<br/>危险操作需确认"]
+            P_PLAN["plan<br/>纯只读模式"]
+            P_BYPASS["bypassPermissions<br/>跳过所有检查"]
+            P_AUTO["auto<br/>规则引擎自动判断"]
+        end
+
+        USER_CONFIRM["用户确认 UI<br/>Allow / Deny / Always Allow"]
+        PERM_DENIAL["permissionDenials<br/>拒绝记录追踪"]
+        PERM_CONFIG["权限配置来源<br/>settings.json<br/>--dangerously-skip-permissions<br/>CLAUDE.md 软约束"]
+
+        CAN_USE --> WHITELIST -->|"未匹配"| BLACKLIST -->|"未匹配"| PERM_MODES
+        WHITELIST -->|"匹配"| ALLOW_RESULT["ALLOW"]
+        BLACKLIST -->|"匹配"| DENY_RESULT["DENY"]
+        PERM_MODES -->|"需确认"| USER_CONFIRM
+        USER_CONFIRM -->|"Deny"| PERM_DENIAL
+        PERM_DENIAL -.->|"反馈给LLM"| AGENTIC_LOOP
+    end
+
+    %% ============================================================
+    %% 06-system-prompt: 系统提示词
+    %% ============================================================
+    subgraph SYS_PROMPT["06 System Prompt 系统提示词"]
+        direction TB
+        subgraph PROMPT_LAYERS["5层架构"]
+            direction TB
+            L1["Layer 1: 核心指令<br/>(不可变, 角色/安全/工具规则)"]
+            L2["Layer 2: 用户上下文<br/>(CLAUDE.md 多级加载)"]
+            L3["Layer 3: 系统上下文<br/>(git/OS/date/cwd)"]
+            L4["Layer 4: 自定义追加<br/>(Custom Append)"]
+            L5["Layer 5: 动态内容<br/>(Memory/Skills/MCP描述)"]
+            L1 --> L2 --> L3 --> L4 --> L5
+        end
+        TOKEN_BUDGET["Token 预算管理<br/>优先级截断策略"]
+        CLAUDE_MD["CLAUDE.md<br/>全局 > 项目 > 子目录"]
+    end
+
+    %% ============================================================
+    %% 07-ui-layer: UI 层
+    %% ============================================================
+    subgraph UI_LAYER["07 UI 层"]
+        direction TB
+        INK_ENGINE["Ink 引擎<br/>React 18 for CLI<br/>Yoga Flexbox"]
+
+        subgraph UI_MODES["两种模式"]
+            direction LR
+            UI_TUI["Interactive TUI<br/>消息列表/流式输出<br/>工具调用卡片/权限弹窗"]
+            UI_HEADLESS["Headless<br/>纯 stdout 输出<br/>CI/CD 兼容"]
+        end
+
+        subgraph OUTPUT_FMT["3种输出格式"]
+            direction LR
+            FMT_TEXT["text<br/>人类可读"]
+            FMT_JSON["json<br/>完整结构"]
+            FMT_STREAM["stream-json<br/>NDJSON 实时流"]
+        end
+    end
+
+    %% ============================================================
+    %% 08-session-management: 会话管理
+    %% ============================================================
+    subgraph SESSION_MGT["08 会话管理"]
+        direction TB
+        SESSION_STORE["本地存储<br/>~/.claude/projects/hash/id.jsonl"]
+        SESSION_RECOVERY["会话恢复<br/>--resume / --continue / --fork"]
+        CTX_COMPRESS["上下文压缩<br/>LLM 摘要法<br/>~80% 窗口触发"]
+        COMPACT_BOUNDARY["compact_boundary 标记<br/>摘要替换历史消息"]
+
+        SESSION_STORE --> SESSION_RECOVERY
+        CTX_COMPRESS --> COMPACT_BOUNDARY
+    end
+
+    %% ============================================================
+    %% 09-mcp-integration: MCP 集成
+    %% ============================================================
+    subgraph MCP_INTEGRATION["09 MCP 集成"]
+        direction TB
+        MCP_PROTO["MCP 协议<br/>Model Context Protocol<br/>JSON-RPC 2.0"]
+
+        subgraph MCP_TRANSPORT["传输方式"]
+            direction LR
+            MCP_STDIO["stdio<br/>本地子进程"]
+            MCP_HTTP["Streamable HTTP<br/>远程服务"]
+        end
+
+        subgraph MCP_CAPS["3种能力"]
+            direction LR
+            MCP_CAP_TOOLS["Tools<br/>工具调用"]
+            MCP_CAP_RES["Resources<br/>资源读取"]
+            MCP_CAP_PROMPT["Prompts<br/>提示模板"]
+        end
+
+        MCP_NAMING["工具命名<br/>mcp__{serverName}__{toolName}"]
+        MCP_HANDSHAKE["初始化握手<br/>initialize → tools/list"]
+    end
+
+    %% ============================================================
+    %% 10-agent-subsystem: Agent 子系统
+    %% ============================================================
+    subgraph AGENT_SUB["10 Agent 子系统"]
+        direction TB
+        NESTED_AGENT["嵌套 Agent 模式<br/>主Agent生成子Agent<br/>(类似 OS 进程模型)"]
+
+        subgraph AGENT_TYPES["Agent 类型"]
+            direction LR
+            AG_GENERAL["通用型<br/>全部工具 / Sonnet"]
+            AG_EXPLORE["Explore<br/>只读 / Haiku(降级)"]
+            AG_PLAN["Plan<br/>只读 / Sonnet"]
+            AG_CUSTOM["Custom<br/>自定义提示词"]
+        end
+
+        GIT_WORKTREE["Git Worktree 隔离<br/>并行文件修改"]
+        SEND_MSG["SendMessage<br/>Agent 间通信"]
+        MAP_REDUCE["MapReduce 并行模式<br/>分治 + 汇总"]
+    end
+
+    %% ============================================================
+    %% 11-plugin-and-hooks: 插件与 Hooks
+    %% ============================================================
+    subgraph PLUGIN_HOOKS["11 插件与 Hooks"]
+        direction TB
+        PLUGINS["Plugins = MCP Servers<br/>user / project / local 作用域"]
+
+        subgraph HOOK_EVENTS["Hooks 事件"]
+            direction LR
+            H_PRE["PreToolUse<br/>工具执行前"]
+            H_POST["PostToolUse<br/>工具执行后"]
+            H_PROMPT["UserPromptSubmit<br/>用户提交"]
+            H_STOP["Stop<br/>会话结束"]
+        end
+
+        SANDBOX["沙箱安全<br/>macOS Seatbelt<br/>Linux seccomp"]
+        AUTO_MEMORY["Auto Memory<br/>MEMORY.md 持久化"]
+        THINKING["Thinking 模式<br/>adaptive / disabled"]
+    end
+
+    %% ============================================================
+    %% 12-tech-stack: 技术栈
+    %% ============================================================
+    subgraph TECH_STACK["12 技术栈与性能"]
+        direction TB
+        subgraph CORE_TECH["核心技术"]
+            direction LR
+            NODEJS["Node.js 18+ ESM"]
+            COMMANDER["Commander.js"]
+            INK_REACT["Ink / React 18"]
+            ZUSTAND["Zustand-like 状态"]
+            ANTHROPIC_API["Anthropic Messages API<br/>SSE Streaming"]
+        end
+
+        subgraph DESIGN_PATTERNS["6大设计模式"]
+            direction LR
+            DP_ASYNC["Async Generator"]
+            DP_EVENT["Event-Driven"]
+            DP_MW["Middleware"]
+            DP_PROMPT["Layered Prompt"]
+            DP_NESTED["Nested Agent"]
+            DP_COMPRESS["Context Compression"]
+        end
+
+        subgraph PERF_OPT["6大性能优化"]
+            direction LR
+            PERF_STREAM["Streaming TTFT"]
+            PERF_PREFETCH["并行预取"]
+            PERF_RG["ripgrep 原生搜索"]
+            PERF_BUNDLE["单文件 Bundle"]
+            PERF_CACHE["Prompt Caching"]
+            PERF_DOWNGRADE["子Agent模型降级"]
+        end
+    end
+
+    %% ============================================================
+    %% 主流程连接线
+    %% ============================================================
+
+    %% 01 -> 02: 用户启动
+    USER --> CLI_ENTRY
+
+    %% 02 -> 07: 启动后进入 UI
+    HEADLESS_MODE --> UI_HEADLESS
+    TUI_MODE --> UI_TUI
+
+    %% 02 -> 03: 初始化完成进入核心循环
+    MODE_SWITCH --> LOOP_START
+
+    %% 03 -> 06: 循环中构建 System Prompt
+    API_CALL -.->|"构建 prompt"| SYS_PROMPT
+
+    %% 03 -> 04: 循环中调用工具
+    TOOL_EXEC_ENTRY --> T_VALID
+
+    %% 04 -> 05: 工具执行前权限检查
+    T_PERM --> CAN_USE
+
+    %% 04 -> 09: MCP 工具集成
+    MCP_TOOLS_REF --> MCP_NAMING
+
+    %% 05 -> 07: 权限确认通过 UI 展示
+    USER_CONFIRM -.->|"UI 展示"| UI_TUI
+
+    %% 03 -> 08: 循环中管理会话
+    END_TURN -.->|"保存会话"| SESSION_STORE
+    API_CALL -.->|"token 监控"| CTX_COMPRESS
+
+    %% 02 -> 09: 启动时连接 MCP
+    MCP_CONNECT --> MCP_HANDSHAKE
+
+    %% 04 -> 10: Agent 工具触发子 Agent
+    SUB_TOOLS --> NESTED_AGENT
+
+    %% 10 -> 03: 子 Agent 运行自己的循环
+    NESTED_AGENT -.->|"子循环"| LOOP_START
+
+    %% 09 -> 11: MCP = 插件系统
+    MCP_INTEGRATION -.->|"插件即MCP"| PLUGINS
+
+    %% 11 -> 04: Hooks 拦截工具执行
+    H_PRE -.->|"拦截/修改"| T_EXEC
+    H_POST -.->|"后处理"| T_RES
+
+    %% 11 -> 06: Memory 注入 Prompt
+    AUTO_MEMORY -.->|"注入"| L5
+
+    %% 12 底层支撑所有模块
+    TECH_STACK -.->|"技术底座"| OVERVIEW
+
+    %% ============================================================
+    %% 样式定义
+    %% ============================================================
+    classDef overviewStyle fill:#1a73e8,stroke:#0d47a1,color:#fff,stroke-width:2px
+    classDef startupStyle fill:#4caf50,stroke:#2e7d32,color:#fff,stroke-width:2px
+    classDef loopStyle fill:#ff9800,stroke:#e65100,color:#fff,stroke-width:2px
+    classDef toolStyle fill:#9c27b0,stroke:#6a1b9a,color:#fff,stroke-width:2px
+    classDef permStyle fill:#f44336,stroke:#c62828,color:#fff,stroke-width:2px
+    classDef promptStyle fill:#00bcd4,stroke:#00838f,color:#fff,stroke-width:2px
+    classDef uiStyle fill:#607d8b,stroke:#37474f,color:#fff,stroke-width:2px
+    classDef sessionStyle fill:#795548,stroke:#4e342e,color:#fff,stroke-width:2px
+    classDef mcpStyle fill:#3f51b5,stroke:#1a237e,color:#fff,stroke-width:2px
+    classDef agentStyle fill:#e91e63,stroke:#880e4f,color:#fff,stroke-width:2px
+    classDef pluginStyle fill:#009688,stroke:#004d40,color:#fff,stroke-width:2px
+    classDef techStyle fill:#455a64,stroke:#263238,color:#fff,stroke-width:2px
+
+    class USER,ARCH overviewStyle
+    class CLI_ENTRY,TOP_ENTRY,MAIN_PARSE,RUN_FUNC,CONFIG_LOAD,PREFETCH,PERM_INIT,MCP_CONNECT,SESSION_RESTORE,MODE_SWITCH,HEADLESS_MODE,TUI_MODE startupStyle
+    class LOOP_START,API_CALL,STREAM_PARSE,STOP_CHECK,END_TURN,TOOL_USE,MAX_TOKENS,TOOL_EXEC_ENTRY,TOOL_RESULT,BUDGET_CTRL,PROMPT_CACHE loopStyle
+    class CMD_TOOLS,FILE_TOOLS,SEARCH_TOOLS,SUB_TOOLS,NET_TOOLS,OTHER_TOOLS,T_REG,T_DESC,T_SELECT,T_VALID,T_PERM,T_EXEC,T_RES,VENDOR_DEPS,MCP_TOOLS_REF toolStyle
+    class CAN_USE,WHITELIST,BLACKLIST,P_DEFAULT,P_PLAN,P_BYPASS,P_AUTO,USER_CONFIRM,PERM_DENIAL,PERM_CONFIG,ALLOW_RESULT,DENY_RESULT permStyle
+    class L1,L2,L3,L4,L5,TOKEN_BUDGET,CLAUDE_MD promptStyle
+    class INK_ENGINE,UI_TUI,UI_HEADLESS,FMT_TEXT,FMT_JSON,FMT_STREAM uiStyle
+    class SESSION_STORE,SESSION_RECOVERY,CTX_COMPRESS,COMPACT_BOUNDARY sessionStyle
+    class MCP_PROTO,MCP_STDIO,MCP_HTTP,MCP_CAP_TOOLS,MCP_CAP_RES,MCP_CAP_PROMPT,MCP_NAMING,MCP_HANDSHAKE mcpStyle
+    class NESTED_AGENT,AG_GENERAL,AG_EXPLORE,AG_PLAN,AG_CUSTOM,GIT_WORKTREE,SEND_MSG,MAP_REDUCE agentStyle
+    class PLUGINS,H_PRE,H_POST,H_PROMPT,H_STOP,SANDBOX,AUTO_MEMORY,THINKING pluginStyle
+    class NODEJS,COMMANDER,INK_REACT,ZUSTAND,ANTHROPIC_API,DP_ASYNC,DP_EVENT,DP_MW,DP_PROMPT,DP_NESTED,DP_COMPRESS,PERF_STREAM,PERF_PREFETCH,PERF_RG,PERF_BUNDLE,PERF_CACHE,PERF_DOWNGRADE techStyle
