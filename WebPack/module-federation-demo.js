@@ -361,6 +361,21 @@ async function main() {
   // ── 3. 查看共享作用域 ─────────────────────────────────────────────
   console.log("\n【步骤 3】共享作用域（Shared Scope）\n");
   console.log("  init() 后，各应用的共享依赖已合并到全局 shareScope：\n");
+  //
+  // host.shareScope 在当前演示里的结构大致是：
+  // {
+  //   react: {
+  //     "18.2.0": { get, from: "appA", loaded: false },
+  //     "18.3.0": { get, from: "appB", loaded: false },
+  //   },
+  //   lodash: {
+  //     "4.17.21": { get, from: "appA", loaded: false },
+  //   },
+  // }
+  //
+  // 所以下面的两层循环是：
+  //   外层：遍历“共享包名 -> 版本表”
+  //   内层：遍历“某个包的版本号 -> 对应提供者信息”
   for (const [pkg, versions] of Object.entries(host.shareScope)) {
     console.log(`  ${pkg}:`);
     for (const [ver, info] of Object.entries(versions)) {

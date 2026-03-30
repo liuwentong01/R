@@ -192,6 +192,14 @@ function buildModuleGraph(entryId) {
   visit(entryId);
 
   // 判断哪些模块可以合并
+  // canConcatenate 结构：
+  // {
+  //   "./src/index.js": { can: true, isRoot: true, reasons: ["入口模块（根）"] },
+  //   "./src/math.js": { can: true, isRoot: false, reasons: ["可以合并"] },
+  //   "./src/shared.js": { can: false, isRoot: false, reasons: ["被 2 个模块引用（只被 1 个引用才能合并）"] },
+  // }
+  //
+  // 下面这层循环就是在给 graph 中的每个模块打“能不能被 scope hoist”的标签。
   const canConcatenate = {};
   const cycleDetected = hasCycle(entryId, graph, new Set(), new Set());
 
@@ -270,6 +278,22 @@ function scopeHoist(entryId, graph, canConcatenate) {
   // 收集导出映射：{ moduleId: { exportName: prefixedName } }
   const exportMappings = {};
 
+  // mergeableModules 结构：
+  // {
+  //   "./src/math.js": { moduleId, imports, exports, source },
+  //   "./src/utils.js": { moduleId, imports, exports, source },
+  // }
+  //
+  // exportMappings 会在循环后变成：
+  // {
+  //   "./src/math.js": { add: "math_add", minus: "math_minus" },
+  //   "./src/utils.js": { format: "utils_format" },
+  // }
+  //
+  // 所以下面的外层循环是在“逐个处理要内联的模块”，
+  // 而每个模块内部又会做两遍 traverse：
+  //   第一遍收集 exportName -> prefixedName
+  //   第二遍真正改 AST（删 export / 改名 / 删 import）
   const inlinedCode = {};
   for (const [id, mod] of Object.entries(mergeableModules)) {
     const prefix = prefixes[id];
@@ -332,6 +356,14 @@ function scopeHoist(entryId, graph, canConcatenate) {
   const rootAst = parser.parse(rootSource, { sourceType: "module" });
 
   // 收集 import 绑定到前缀名的映射
+  // localToPrefix 结构：
+  // {
+  //   add: "math_add",
+  //   format: "utils_format",
+  // }
+  //
+  // key 是“根模块里原本 import 进来的本地变量名”，
+  // value 是“被 scope hoist 后应替换成的带前缀变量名”。
   const localToPrefix = {};
   const importsToRemove = new Set();
 

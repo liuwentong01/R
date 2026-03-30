@@ -66,6 +66,15 @@ function require(modulePath) {
  * @param {object} definition - 属性定义对象，key是属性名，value是getter函数
  */
 require.defineProperty = (exports, definition) => {
+  // definition 结构：
+  // {
+  //   age: () => age,
+  //   default: () => DEFAULT_EXPORT,
+  // }
+  //
+  // key 是导出名，value 是 getter。
+  // 这里遍历 definition，把每个导出名都定义到 exports 上，
+  // 因此后续读取 exports.age / exports.default 时会动态取值，达到 live binding 的效果。
   for (var key in definition) {
     Object.defineProperty(exports, key, {
       enumerable: true, // 可枚举

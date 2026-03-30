@@ -428,6 +428,21 @@ require.O = function (result, chunkIds, fn, priority) {
 
   // ---- 检查模式（无 chunkIds 参数）----
   // 遍历延迟队列，找出所有依赖已满足的任务并执行
+  //
+  // deferred 结构：
+  // [
+  //   [["vendors"], entryFactory, 0],
+  //   [["src_test_js", "vendors"], anotherFactory, 10],
+  // ]
+  //
+  // 当前循环里各变量的含义：
+  //   deferredItem      -> 单个队列项 [chunkIds, fn, priority]
+  //   deferredChunkIds  -> 该任务仍在等待的 chunkId 数组
+  //   deferredFn        -> 依赖满足后要执行的工厂函数
+  //   deferredPriority  -> 优先级
+  //
+  // 注意：deferredChunkIds 会在内层 for 中被 splice 原地删除，
+  // 所以它表示“剩余未满足的依赖”，不是固定不变的输入。
   var notFulfilled = Infinity;
   for (var i = 0; i < deferred.length; i++) {
     var deferredItem = deferred[i];
@@ -493,6 +508,16 @@ require.O.j = function (chunkId) {
  * @param {Array} data - [chunkIds, moreModules, runtime?]
  */
 function webpackJsonpCallback(parentChunkLoadingFunction, data) {
+  // data 结构：
+  // [
+  //   ["src_test_js"],                         // chunkIds：本次加载完成的 chunk 列表
+  //   { "./src/test.js": factory, ... },      // moreModules：这个 chunk 文件携带的模块工厂
+  //   runtime?                                 // 可选：额外运行时初始化函数
+  // ]
+  //
+  // 当前函数的两层循环分别在做：
+  //   1. 遍历 chunkIds，把对应 installedChunks[chunkId] 标成 0（已完成）
+  //   2. 遍历 moreModules，把模块工厂合并进全局 modules
   var chunkIds = data[0];
   var moreModules = data[1];
   var runtime = data[2]; // 可选的运行时初始化函数

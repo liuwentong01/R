@@ -337,6 +337,23 @@ function collectProvidedExports(source) {
 // import * as xxx → 所有导出都被使用，标记 '*'
 
 function collectUsedExports(allSources) {
+  // allSources 结构：
+  // {
+  //   "./src/index.js": "源码字符串",
+  //   "./src/math.js": "源码字符串",
+  //   ...
+  // }
+  //
+  // usedMap 结构：
+  // {
+  //   "./src/math.js": Set(["add", "default"]),
+  //   "./src/logger.js": Set(["*"]),
+  // }
+  //
+  // 所以下面的流程是：
+  //   外层 for 遍历“每一个源码文件”
+  //   内层 traverse 扫描该文件里的 import 声明
+  //   然后把“某个被 import 的模块用到了哪些导出”累计到 usedMap 上
   const usedMap = {}; // { 模块路径: Set<被使用的导出名> }
 
   for (const source of Object.values(allSources)) {
@@ -375,6 +392,23 @@ function collectUsedExports(allSources) {
 // 遍历整个模块依赖图，为每个模块计算哪些导出被使用、哪些未被使用
 
 function markUnusedExports(providedMap, usedMap) {
+  // providedMap 结构：
+  // {
+  //   "./src/math.js": ["add", "minus", "multiply"],
+  //   "./src/logger.js": ["default"],
+  // }
+  //
+  // usedMap 结构：
+  // {
+  //   "./src/math.js": Set(["add"]),
+  // }
+  //
+  // result 结构：
+  // {
+  //   "./src/math.js": { used: ["add"], unused: ["minus", "multiply"] },
+  // }
+  //
+  // 下面这层循环就是把“声明过哪些导出”和“真正被用到哪些导出”做一次对账。
   const result = {};
 
   for (const [filePath, provided] of Object.entries(providedMap)) {

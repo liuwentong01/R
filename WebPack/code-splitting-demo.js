@@ -188,6 +188,22 @@ function buildDependencyGraph(entryId) {
   buildModule(entryId, syncModules, dynamicImports);
 
   // ── 为每个 import() 构建独立的 async chunk ──────────────────────────
+  //
+  // dynamicImports 结构：
+  // [
+  //   { depId: "./src/lazy-module.js", chunkName: "chunk-lazy-module" },
+  //   ...
+  // ]
+  //
+  // 每轮循环会生成一个 async chunk：
+  //   chunkModules = {
+  //     "./src/lazy-module.js": "转换后的代码",
+  //     "./src/dep.js": "该异步模块继续同步依赖到的代码",
+  //   }
+  //
+  // 也就是说：
+  //   外层 forEach 决定“要生成哪些异步 chunk”
+  //   内层 buildChunkModule 递归决定“这个异步 chunk 里具体装哪些模块”
   dynamicImports.forEach(({ depId, chunkName }) => {
     const chunkModules = {};
     const chunkVisited = new Set();
@@ -332,6 +348,15 @@ ${moduleEntries}
 
   /* ---- webpackJsonpCallback ---- */
   function webpackJsonpCallback(parentFn, data) {
+    // data 结构：
+    // [
+    //   ["chunk-lazy-module"],                  // chunkIds
+    //   { "./src/lazy-module.js": factory },   // moreModules
+    // ]
+    //
+    // 这里的两层循环含义：
+    //   1. 遍历 chunkIds，更新 installedChunks 状态并 resolve 对应 Promise
+    //   2. 遍历 moreModules，把异步 chunk 携带的模块并入全局 modules 表
     var chunkIds = data[0], moreModules = data[1];
     for (var i = 0; i < chunkIds.length; i++) {
       if (require.o(installedChunks, chunkIds[i]) && installedChunks[chunkIds[i]])

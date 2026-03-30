@@ -208,6 +208,17 @@ class SyncWaterfallHook extends Hook {
 
 class SyncLoopHook extends Hook {
   call(...args) {
+    // this._taps 结构：
+    // [
+    //   { type: "sync", name: "PluginA", fn },
+    //   { type: "sync", name: "PluginB", fn },
+    // ]
+    //
+    // 这个 while + for 的组合容易看晕，它的语义是：
+    //   - 外层 while 表示“是否还要再来一整轮”
+    //   - 内层 for 表示“按注册顺序执行当前这一轮的所有 tap”
+    //   - 只要某个 tap 返回了非 undefined，就立刻 break，
+    //     并把 looping 重新置为 true，让下一轮从第一个 tap 重新开始
     let looping = true;
     while (looping) {
       looping = false;
@@ -246,6 +257,18 @@ class AsyncSeriesHook extends Hook {
     const taps = this._taps;
     let index = 0;
 
+    // taps 结构：
+    // [
+    //   { type: "sync", name, fn },
+    //   { type: "async", name, fn },
+    //   { type: "promise", name, fn },
+    // ]
+    //
+    // index 表示当前串行执行到哪个 tap。
+    // next() 每调用一次，只推进一个 tap：
+    //   - sync    : 立刻执行，然后递归 next()
+    //   - async   : 等 callback 再 next()
+    //   - promise : 等 then() 再 next()
     const next = () => {
       if (index >= taps.length) {
         finalCallback();

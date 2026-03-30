@@ -316,6 +316,19 @@ function generateSourceMap(modules, moduleOffsets, bundleFileName) {
   let prevSourceLine = 0;
   let prevSourceCol = 0;
 
+  // 这里几个核心对象的关系：
+  //   sourcesList    -> 第 si 个源文件是谁（sourceIndex -> moduleId）
+  //   moduleOffsets  -> 该模块在 bundle 里从第几行开始
+  //   mappingsLines  -> bundle 每一行对应一条 VLQ 映射字符串
+  //
+  // 例如：
+  //   sourcesList[0] = "./src/index.js"
+  //   moduleOffsets["./src/index.js"] = 12
+  //
+  // 那么下面双层循环的含义就是：
+  //   外层按源文件遍历
+  //   内层按该源文件的每一行遍历
+  //   最终把“源文件第 origLine 行”映射到“bundle 第 bundleStartLine + origLine 行”
   for (let si = 0; si < sourcesList.length; si++) {
     const moduleId = sourcesList[si];
     const bundleStartLine = moduleOffsets[moduleId];
@@ -426,6 +439,21 @@ const mappingLines = sourceMap.mappings.split(";");
 // 解析时重置状态
 let dPrevSrc = 0, dPrevLine = 0, dPrevCol = 0;
 
+// mappingLines 结构：
+// [
+//   "",         // 空串表示这一行没有映射
+//   "CAAA",     // 一整行的 VLQ segment 串
+//   ...
+// ]
+//
+// 对于当前这个教学版 demo，每个非空行基本只放一个 segment，
+// 解码后 fields 形如：
+//   [genCol, deltaSourceIndex, deltaSourceLine, deltaSourceCol]
+//
+// 所以下面的流程是：
+//   1. 外层 forEach 按 bundle 的每一行处理
+//   2. 内层 while 从这一行的 VLQ 字符串里不断解出整数
+//   3. 再结合 dPrevSrc / dPrevLine / dPrevCol 还原成真实源位置
 mappingLines.forEach((line, bundleLine) => {
   if (!line) return;
 

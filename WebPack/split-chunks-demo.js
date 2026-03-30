@@ -135,11 +135,38 @@ const modules = {
 //
 // 对应 webpack Compilation.seal() 阶段：
 // 遍历所有入口，收集每个 chunk 包含的模块
-
+//
+// entries 结构：
+// [
+//   { name: "pageA", entry: "src/pageA.js" },
+//   { name: "pageB", entry: "src/pageB.js" },
+// ]
+//
+// 本函数最终返回的 chunks 结构：
+// {
+//   pageA: {
+//     name: "pageA",
+//     entry: "src/pageA.js",
+//     syncModules: Set([...]),   // 当前 chunk 真正包含的同步模块（含入口自己）
+//     asyncDeps: Set([...]),     // 当前入口直接声明的异步 import() 目标
+//   },
+//   pageB: { ... },
+//   "async-async-chart": {
+//     name: "async-async-chart",
+//     entry: "src/async-chart.js",
+//     syncModules: Set(["src/async-chart.js"]),
+//     asyncDeps: Set(),
+//     isAsync: true,
+//     requestedBy: Set(["pageA", "pageB"]),
+//   },
+// }
+ // TODO 要在生成了全局modules之后再去收集依赖（本文上面直接模拟了modules）
 function buildChunks(entries) {
   const chunks = {};
 
   entries.forEach(({ name, entry }) => {
+    // 当前正在构建的单个 chunk 对象。
+    // 例如第一轮循环时，对应 pageA 的 chunk。
     const chunk = {
       name,
       entry,
@@ -160,18 +187,25 @@ function buildChunks(entries) {
 
     collectSync(entry);
 
-    // 收集异步依赖
+    // 这里只读取“入口模块本身”声明的异步 import()。
+    // mod 例如是 modules["src/pageA.js"]。
     const mod = modules[entry];
     if (mod && mod.asyncDeps) {
       mod.asyncDeps.forEach((dep) => chunk.asyncDeps.add(dep));
     }
 
+    // chunks[name] 的 key 是 chunk 名，value 是完整的 chunk 对象。
     chunks[name] = chunk;
   });
 
-  // 为异步依赖也创建 chunk
+  // asyncChunkModules 结构：
+  // {
+  //   "src/async-chart.js": Set(["pageA", "pageB"])
+  // }
+  // 含义：某个异步模块被哪些入口 chunk 请求了。
   const asyncChunkModules = {};
   Object.values(chunks).forEach((chunk) => {
+    // 这里的 chunk 是 pageA / pageB 这类已构建好的入口 chunk。
     chunk.asyncDeps.forEach((dep) => {
       if (!asyncChunkModules[dep]) asyncChunkModules[dep] = new Set();
       asyncChunkModules[dep].add(chunk.name);
@@ -179,6 +213,8 @@ function buildChunks(entries) {
   });
 
   for (const [moduleId, fromChunks] of Object.entries(asyncChunkModules)) {
+    // moduleId: 异步模块 id，例如 "src/async-chart.js"
+    // fromChunks: Set(["pageA", "pageB"])，表示它被哪些 chunk 触发加载
     const chunkName = "async-" + moduleId.replace("src/", "").replace(".js", "");
     chunks[chunkName] = {
       name: chunkName,
@@ -201,9 +237,19 @@ function buildChunks(entries) {
 // 记录每个模块被哪些 chunk 包含，用于判断是否需要提取
 
 function analyzeModuleUsage(chunks) {
+  // moduleToChunks 结构：
+  // {
+  //   "node_modules/lodash/index.js": Set(["pageA", "pageB"]),
+  //   "src/shared-utils.js": Set(["pageA", "pageB"]),
+  //   "src/componentA.js": Set(["pageA"]),
+  //   "src/async-chart.js": Set(["async-async-chart"]),
+  // }
+  // 含义：一个模块最终被哪些 chunk 持有。
   const moduleToChunks = {};  // { moduleId: Set<chunkName> }
 
   for (const [chunkName, chunk] of Object.entries(chunks)) {
+    // chunkName 是 "pageA" / "pageB" / "async-async-chart"
+    // chunk 是对应的 chunk 对象
     chunk.syncModules.forEach((moduleId) => {
       if (!moduleToChunks[moduleId]) moduleToChunks[moduleId] = new Set();
       moduleToChunks[moduleId].add(chunkName);
@@ -234,9 +280,9 @@ function analyzeModuleUsage(chunks) {
 
 function applySplitChunks(chunks, moduleToChunks, config) {
   const splitResult = {
-    newChunks: {},      // 新提取出的 chunk
-    removals: [],       // 从原 chunk 中移除的记录
-    decisions: [],      // 决策日志
+    newChunks: {},      // 新提取出的 chunk：{ vendors: { name, modules, totalSize, fromGroup } }
+    removals: [],       // 从原 chunk 中移除的记录：[{ module, fromChunk }]
+    decisions: [],      // 决策日志：[{ module, action, group?, targetChunk?, reason }]
   };
 
   // 按优先级排序 cacheGroups
@@ -244,12 +290,21 @@ function applySplitChunks(chunks, moduleToChunks, config) {
     .map(([name, group]) => ({ name, ...group }))
     .sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
-  // 遍历所有模块
+  // 遍历所有模块。
+  // Object.entries(moduleToChunks) 的每一项形如：
+  // ["src/shared-utils.js", Set(["pageA", "pageB"])]
   for (const [moduleId, chunkSet] of Object.entries(moduleToChunks)) {
     const mod = modules[moduleId];
     if (!mod) continue;
 
-    // 跳过入口模块本身（入口不能被提取走）
+    // chunks 是 buildChunks() 返回的总表，不是数组，而是：
+    // { chunkName -> chunkObject }
+    //
+    // Object.values(chunks) 取出来的每个 c，都是一个 chunk 对象：
+    // { name, entry, syncModules, asyncDeps, isAsync? ... }
+    //
+    // 这里在判断：当前 moduleId 是否恰好等于某个“非异步 chunk”的 entry。
+    // 如果是，就说明它是 pageA/pageB 这类入口模块本身，不能被抽到 common/vendors 里。
     const isEntry = Object.values(chunks).some((c) => c.entry === moduleId && !c.isAsync);
     if (isEntry) {
       splitResult.decisions.push({
@@ -260,7 +315,9 @@ function applySplitChunks(chunks, moduleToChunks, config) {
       continue;
     }
 
-    // 尝试匹配 cacheGroup（按优先级）
+    // 尝试匹配 cacheGroup（按优先级）。
+    // group 例如：
+    // { name: "vendors", test: /node_modules/, priority: -10, minChunks: 1, minSize: 0 }
     let matched = false;
     for (const group of groups) {
       // ── 检查 test 条件 ──
@@ -310,7 +367,9 @@ function applySplitChunks(chunks, moduleToChunks, config) {
       splitResult.newChunks[targetChunkName].modules.push(moduleId);
       splitResult.newChunks[targetChunkName].totalSize += mod.size;
 
-      // 记录从哪些 chunk 中移除
+      // chunkSet 表示“当前模块原本属于哪些 chunk”。
+      // 比如 lodash 对应的 chunkSet 可能是 Set(["pageA", "pageB"])。
+      // 一旦它被提取到 vendors，就要从这些原始 chunk 中删掉。
       chunkSet.forEach((chunkName) => {
         splitResult.removals.push({ module: moduleId, fromChunk: chunkName });
       });
@@ -347,7 +406,12 @@ function applySplitChunks(chunks, moduleToChunks, config) {
 function generateFinalChunks(chunks, splitResult) {
   const finalChunks = {};
 
-  // 复制原始 chunk，移除被提取的模块
+  // removedFromChunk 结构：
+  // {
+  //   pageA: Set(["node_modules/lodash/index.js", "src/shared-utils.js"]),
+  //   pageB: Set(["node_modules/lodash/index.js", "src/shared-utils.js"]),
+  // }
+  // 含义：每个原始 chunk 里有哪些模块已经被抽走了。
   const removedFromChunk = {};
   splitResult.removals.forEach(({ module: mod, fromChunk }) => {
     if (!removedFromChunk[fromChunk]) removedFromChunk[fromChunk] = new Set();
@@ -355,6 +419,8 @@ function generateFinalChunks(chunks, splitResult) {
   });
 
   for (const [name, chunk] of Object.entries(chunks)) {
+    // removed 表示当前 chunk 需要移除的模块集合
+    // remaining 表示移除后最终保留在该 chunk 中的模块
     const removed = removedFromChunk[name] || new Set();
     const remaining = [...chunk.syncModules].filter((m) => !removed.has(m));
     const totalSize = remaining.reduce((sum, m) => sum + (modules[m]?.size || 0), 0);

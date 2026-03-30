@@ -214,6 +214,16 @@ class CachedCompiler {
     // ── 查缓存 ────────────────────────────────────────────────────────
     const cached = this.cache.get(moduleId, etag);
     if (cached) {
+      // cached 结构（命中磁盘缓存后反序列化得到）：
+      // {
+      //   id: "greeting.js",
+      //   _source: "转换后的模块代码",
+      //   dependencies: [{ depModuleId: "helper.js" }, ...],
+      // }
+      //
+      // 注意这里虽然当前模块命中缓存了，
+      // 但仍要继续遍历 cached.dependencies 递归 buildModule，
+      // 因为它依赖的子模块可能已经失效，需要单独检查。
       console.log(`  [CACHE HIT]  ${moduleId} (etag: ${etag.slice(0, 8)})`);
       const mod = { ...cached, fromCache: true };
       this.modules.push(mod);
@@ -310,6 +320,14 @@ module.exports = function(name) { return helper.prefix() + 'Hello, ' + name + '!
 };
 
 function printResult(label, result) {
+  // result 结构：
+  // {
+  //   modules: [
+  //     { id, _source, dependencies, fromCache, compileTime? },
+  //   ],
+  //   elapsed: 12,
+  //   cacheStats: { hit: 3, miss: 1 },
+  // }
   console.log(`\n  结果:`);
   console.log(`    模块数: ${result.modules.length}`);
   console.log(`    缓存命中: ${result.cacheStats.hit}`);
@@ -388,6 +406,23 @@ function main() {
     const cacheFile = path.join(CACHE_DIR, "cache.json");
     if (fs.existsSync(cacheFile)) {
       const cacheData = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+      // cacheData 结构：
+      // {
+      //   "index.js": {
+      //     etag: "...",
+      //     timestamp: 1711111111111,
+      //     value: {
+      //       id: "index.js",
+      //       _source: "...",
+      //       dependencies: [{ depModuleId: "greeting.js" }, { depModuleId: "utils.js" }],
+      //     },
+      //   },
+      //   ...
+      // }
+      //
+      // 所以下面的循环是：
+      //   外层拿到 key -> entry
+      //   再从 entry.value 里继续读取真正缓存的模块内容
       for (const [key, entry] of Object.entries(cacheData)) {
         console.log(`  ${key}:`);
         console.log(`    etag: ${entry.etag}`);

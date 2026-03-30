@@ -19,6 +19,13 @@ var modules = {
 
 // ============ 模块缓存 ============
 // 缓存对象，用于存储已经加载过的模块，避免重复执行模块代码
+// cache 结构：
+// {
+//   "./src/name.js": { exports: "不要秃头啊" }
+// }
+//
+// key 是模块路径，value 是模块对象本身。
+// 后面 require() 里会先查这个表，再决定是否执行模块工厂函数。
 var cache = {};
 
 // ============ require函数实现 ============
@@ -29,6 +36,18 @@ var cache = {};
  */
 function require(modulePath) {
   // 1. 检查缓存：获取已缓存的模块
+  // modules 结构：
+  // {
+  //   "./src/name.js": (module, exports, require) => { ... }
+  // }
+  //
+  // cache[modulePath] 结构：
+  // { exports: ... }
+  //
+  // 所以这里的流程是：
+  //   1. modulePath 去 modules 表里找到工厂函数
+  //   2. 先在 cache 里创建/复用模块对象
+  //   3. 执行工厂函数填充 module.exports
   var cachedModule = cache[modulePath];
   if (cachedModule !== undefined) {
     // 如果有缓存，则不重新执行模块内容，直接return导出的值

@@ -97,6 +97,19 @@ class LoaderRunner {
       _callback: null, // this.async() 返回的 callback
     }));
 
+    // loaderContexts 结构：
+    // [
+    //   { name: "style-loader", normal, pitch, data: {}, async: false, _callback: null },
+    //   { name: "css-loader", normal, pitch, data: {}, async: false, _callback: null },
+    //   { name: "postcss-loader", normal, pitch, data: {}, async: false, _callback: null },
+    // ]
+    //
+    // 理解这个数组后，后面的状态机就容易很多：
+    //   - Pitch 阶段：按索引从左到右走（0 -> n）
+    //   - Normal 阶段：按索引从右到左走（n -> 0）
+    //   - loaderIndex 始终指向“当前正在执行的那个 loaderContext”
+    //   - ctx.data 是同一个 loader 的 pitch / normal 之间共享的数据槽
+
     let loaderIndex = 0; // 当前执行到第几个 loader
     let currentPhase = "pitch"; // 当前阶段："pitch" 或 "normal"
     const logs = []; // 收集执行日志（用于演示输出）
