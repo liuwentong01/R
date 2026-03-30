@@ -156,6 +156,7 @@ function buildChunks(entries) {
         mod.deps.forEach((dep) => collectSync(dep));
       }
     }
+    // TODO 如果react里以来的lodash怎么办
 
     collectSync(entry);
 
