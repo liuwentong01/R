@@ -183,7 +183,7 @@ function buildChunks(entries) {
         mod.deps.forEach((dep) => collectSync(dep));
       }
     }
-    // TODO 如果react里以来的lodash怎么办
+    // TODO 如果react依赖了lodash怎么办
 
     collectSync(entry);
 
@@ -277,6 +277,7 @@ function analyzeModuleUsage(chunks) {
 //   - 不实现 maxAsyncRequests / maxInitialRequests 限制
 //   - 不实现 reuseExistingChunk 复用逻辑
 //   - 不实现 automaticNameDelimiter 命名规则
+// TODO webpack怎么实现的maxAsyncRequests，maxInitialRequests
 
 function applySplitChunks(chunks, moduleToChunks, config) {
   const splitResult = {
