@@ -1,7 +1,8 @@
 # OpenClaw 架构分析
 
 > 基于 https://github.com/openclaw/openclaw 仓库的深度架构分析
-> 分析时间：2026-03-21
+> 初次分析：2026-03-21
+> 源码研究：2026-04-03（v2026.4.3）
 
 ## 项目概述
 
@@ -30,6 +31,8 @@ OpenClaw 是一个**个人 AI 助手平台**，核心理念是让用户在自己
 | [08-context-and-memory.md](./08-context-and-memory.md) | 上下文引擎与记忆（4 阶段生命周期、向量检索、记忆刷新） | 核心 |
 | [09-companion-apps.md](./09-companion-apps.md) | 客户端应用（macOS Swabble、iOS/Android Node、Control UI） | 参考 |
 | [10-project-structure.md](./10-project-structure.md) | 工程实践（构建、测试、配置、CI/CD、设计模式） | 参考 |
+| [11-source-code-analysis.md](./11-source-code-analysis.md) | 源码深度分析（核心函数、协议规范、配置格式、代码示例） | 进阶 |
+| [RESEARCH-REPORT-2026-04-03.md](./RESEARCH-REPORT-2026-04-03.md) | 2026-04-03 源码研究报告（关键发现、文件清单、更新建议） | 参考 |
 
 ## 架构总览图
 
