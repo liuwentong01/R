@@ -1,0 +1,23 @@
+{
+  "name": "safe-files-mcp",
+  "version": "1.0.0",
+  "description": "带安全边界的本地只读 MCP 文件服务",
+  "type": "module",
+  "license": "ISC",
+  "bin": {
+    "safe-files-mcp": "./dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2"
+  }
+}
