@@ -37,7 +37,7 @@ Runnable / LCEL → 统一组合方式
 ```python
 from langchain.chat_models import init_chat_model
 
-model = init_chat_model("gpt-4o-mini", model_provider="openai")
+model = init_chat_model("deepseek-v4-flash", model_provider="deepseek")
 
 response = model.invoke("用一句话解释 LangChain")
 print(response.content)

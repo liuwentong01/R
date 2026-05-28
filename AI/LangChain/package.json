@@ -1,0 +1,47 @@
+{
+  "name": "langchain-learning",
+  "version": "0.1.0",
+  "description": "LangChain TypeScript learning demos from 0 to 1.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "stage01:01": "tsx examples/stage01_model_calling/01_simple_invoke.ts",
+    "stage01:02": "tsx examples/stage01_model_calling/02_system_prompt.ts",
+    "stage01:03": "tsx examples/stage01_model_calling/03_prompt_template.ts",
+    "stage01:04": "tsx examples/stage01_model_calling/04_streaming.ts",
+    "stage01": "npm run stage01:01 && npm run stage01:02 && npm run stage01:03 && npm run stage01:04",
+    "stage02:01": "tsx examples/stage02_fixed_chain/01_title_summary_chain.ts",
+    "stage02:02": "tsx examples/stage02_fixed_chain/02_sentiment_json.ts",
+    "stage02:03": "tsx examples/stage02_fixed_chain/03_structured_output.ts",
+    "stage02:04": "tsx examples/stage02_fixed_chain/04_batch_and_stream.ts",
+    "stage02": "npm run stage02:01 && npm run stage02:02 && npm run stage02:03 && npm run stage02:04",
+    "stage03:01": "tsx examples/stage03_rag/01_single_markdown_qa.ts",
+    "stage03:02": "tsx examples/stage03_rag/02_directory_qa_with_sources.ts",
+    "stage03:03": "tsx examples/stage03_rag/03_chunk_size_comparison.ts",
+    "stage03:04": "tsx examples/stage03_rag/04_manual_eval_20_questions.ts",
+    "stage03": "npm run stage03:01 && npm run stage03:02 && npm run stage03:03 && npm run stage03:04",
+    "stage04:01": "tsx examples/stage04_tools/01_calculator_tool.ts",
+    "stage04:02": "tsx examples/stage04_tools/02_weather_tool.ts",
+    "stage04:03": "tsx examples/stage04_tools/03_local_doc_search_tool.ts",
+    "stage04:04": "tsx examples/stage04_tools/04_error_handling_tool.ts",
+    "stage04": "npm run stage04:01 && npm run stage04:02 && npm run stage04:03 && npm run stage04:04",
+    "stage05:01": "tsx examples/stage05_agent/01_calculator_and_search_agent.ts",
+    "stage05:02": "tsx examples/stage05_agent/02_agentic_retrieval_decision.ts",
+    "stage05:03": "tsx examples/stage05_agent/03_tool_call_limit_and_logging.ts",
+    "stage05:04": "tsx examples/stage05_agent/04_high_risk_confirmation.ts",
+    "stage05": "npm run stage05:01 && npm run stage05:02 && npm run stage05:03 && npm run stage05:04",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.0.7",
+    "@langchain/openai": "^1.1.3",
+    "dotenv": "^17.2.3",
+    "langchain": "^1.0.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

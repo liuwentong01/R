@@ -137,7 +137,7 @@ def get_weather(city: str) -> str:
     return f"{city} 今天晴，温度 20 到 28 摄氏度。"
 
 agent = create_agent(
-    model="gpt-4o-mini",
+    model="deepseek-v4-flash",
     tools=[get_weather],
     system_prompt="你是一个简洁的生活助手。",
 )

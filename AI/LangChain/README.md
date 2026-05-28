@@ -9,7 +9,7 @@ LangChain 是一个用于构建 LLM 应用和 AI Agent 的框架。它把模型�
 
 ## 适合解决什么问题
 
-- **统一模型调用**：用相近的接口接入 OpenAI、Anthropic、本地模型、云厂商模型等。
+- **统一模型调用**：用相近的接口接入 DeepSeek、Anthropic、本地模型、云厂商模型等。
 - **组织提示词和输出格式**：把 Prompt、Messages、JSON Schema、Pydantic 结构化输出组合起来。
 - **RAG 知识库问答**：加载文档、切分、向量化、检索，再把相关上下文交给模型回答。
 - **工具调用和 Agent**：让模型在循环中选择工具，调用 API、查数据库、搜索网页、执行代码，直到任务完成。
@@ -25,6 +25,17 @@ LangChain 是一个用于构建 LLM 应用和 AI Agent 的框架。它把模型�
 | [03-rag.md](./03-rag.md) | RAG 完整链路：加载、切分、向量库、检索、生成 | 实战 |
 | [04-agents-and-tools.md](./04-agents-and-tools.md) | Tool、Agent、Middleware、记忆和上下文工程 | 进阶 |
 | [05-learning-roadmap.md](./05-learning-roadmap.md) | 从 0 到 1 学习路线、练手项目和常见坑 | 路线图 |
+
+## 示例代码
+
+| 目录 | 内容 |
+| --- | --- |
+| [examples](./examples) | LangChain TypeScript 分阶段练习代码 |
+| [examples/stage01_model_calling](./examples/stage01_model_calling) | 第 1 阶段：Chat Model、消息、Prompt Template、stream |
+| [examples/stage02_fixed_chain](./examples/stage02_fixed_chain) | 第 2 阶段：Runnable、LCEL、Output Parser、batch、stream |
+| [examples/stage03_rag](./examples/stage03_rag) | 第 3 阶段：Document、Loader、Splitter、Embedding、Vector Store、Retriever |
+| [examples/stage04_tools](./examples/stage04_tools) | 第 4 阶段：tool、参数 schema、工具结果、错误处理 |
+| [examples/stage05_agent](./examples/stage05_agent) | 第 5 阶段：createAgent、Agent Loop、Middleware、工具调用限制 |
 
 ## 最小心智模型
 
