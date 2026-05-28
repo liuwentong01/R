@@ -91,8 +91,8 @@ Node 运行:
 └── 多个手机号或账号可以给 Agent 发消息
 
 注意:
-├── 本地 CLI onboarding 默认写入 "per-channel-peer"（未设置时）
-├── 已有显式值不会被覆盖
+├── 官方当前文档仍说明默认 DM 会共享 `main` session，适合单用户自用
+├── 多人可私聊同一个 Agent 时，应显式设置 "per-channel-peer" 或更细粒度
 └── 可以用 openclaw security audit 验证 DM 设置
 ```
 
@@ -121,7 +121,7 @@ Node 运行:
 ```
 ~/.openclaw/agents/<agentId>/sessions/
 ├── sessions.json                    # 会话映射表（source of truth）
-│                                     # 格式: sessionKey → { sessionId, updatedAt, ... }
+│                                     # 格式: sessionKey → { sessionId, sessionStartedAt, lastInteractionAt, updatedAt, ... }
 │                                     # 删除条目是安全的，下次消息时重建
 ├── <SessionId>.jsonl                # 会话转录（一行一条消息）
 ├── <SessionId>-topic-<threadId>.jsonl  # Telegram 话题转录
@@ -135,6 +135,8 @@ Node 运行:
 {
   "agent:main:main": {
     "sessionId": "boot-2026-03-21_10-30-00-abc12345",
+    "sessionStartedAt": "2026-03-21T10:30:00Z",
+    "lastInteractionAt": "2026-03-21T10:30:00Z",
     "updatedAt": "2026-03-21T10:30:00Z",
     "inputTokens": 15000,
     "outputTokens": 5000,
@@ -188,9 +190,9 @@ Node 运行:
 │  策略类型:                                                   │
 │  ├── daily: 每天凌晨 N 点重置                                │
 │  │   └── 默认 4:00 AM Gateway 主机本地时间                   │
-│  │   └── session 最后更新早于最近的 daily reset 时间 → 过期  │
+│  │   └── 基于 sessionStartedAt，而不是 updatedAt             │
 │  ├── idle: 空闲 N 分钟后重置                                 │
-│  │   └── 滑动空闲窗口                                        │
+│  │   └── 基于 lastInteractionAt，心跳/cron/系统事件不续期    │
 │  └── daily + idle: 先到先重置（哪个先过期就触发）           │
 │                                                              │
 │  类型映射:                                                   │

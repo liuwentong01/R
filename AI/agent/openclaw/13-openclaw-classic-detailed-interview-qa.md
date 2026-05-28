@@ -217,7 +217,7 @@ OpenClaw 的做法是，在上下文接近上限时，触发一个静默的 memo
 
 插件化的好处是把变化隔离出去。核心只维护稳定的宿主能力，比如注册表、生命周期、加载器、配置模型、Hook Runner 和公共 SDK；具体的 Telegram、Discord、OpenAI、Anthropic、memory-lancedb、browser 之类能力，则交给各自插件去实现。这样核心更像平台，插件更像业务模块。
 
-当然，插件化不是免费的。它会引入 manifest、registry、discovery、import boundary、slot、hook、config schema 等一整套机制。但从 OpenClaw 的规模来看，这些机制不是过度设计，而是为了让系统在 70+ 插件规模下仍然可维护。也就是说，它不是为了“优雅”而插件化，而是为了在规模增长后不崩。
+当然，插件化不是免费的。它会引入 manifest、registry、discovery、import boundary、slot、hook、config schema 等一整套机制。但从 OpenClaw 的规模来看，这些机制不是过度设计，而是为了让内置扩展和外部插件持续增长时仍然可维护。也就是说，它不是为了“优雅”而插件化，而是为了在规模增长后不崩。
 
 ### 29. OpenClaw 为什么对插件导入边界限制得这么严格？
 答：因为插件一旦直接深度依赖核心内部实现，就会产生两个严重后果。第一，核心无法自由演进。每次你改一个内部文件路径或类型定义，都可能打崩一堆插件。第二，插件之间会互相耦合，最终形成一个看似插件化、实际高度缠绕的系统。

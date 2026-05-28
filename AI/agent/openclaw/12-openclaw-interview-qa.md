@@ -21,7 +21,7 @@
 答：因为它处理的往往是真实私聊、设备能力和本地工作区数据。Gateway 默认绑定本机地址，很多状态也保存在本地，这样能降低隐私暴露面，同时让助手更像“运行在我自己机器上的个人系统”。
 
 ### 05. OpenClaw 的核心技术栈是什么？
-答：核心代码主要是 TypeScript ESM，运行时推荐 Node 24，也支持 Node 22.16+。工程形态是 pnpm monorepo，测试以 Vitest 为主，Control UI 使用 Lit，插件通过 Plugin SDK 扩展。
+答：核心代码主要是 TypeScript ESM，运行时推荐 Node 24，最低支持 Node 22.19+。工程形态是 pnpm monorepo，测试以 Vitest 为主，Control UI 使用 Lit，插件通过 Plugin SDK 扩展。
 
 ### 06. OpenClaw 支持哪些交互面？
 答：一类是消息渠道，比如 WhatsApp、Telegram、Slack、Discord、Signal、iMessage、WebChat 等；另一类是设备与客户端，比如 macOS、iOS、Android、CLI、Web UI、Canvas。面试里要抓住一点：它不是单聊天框产品，而是“多入口统一助手”。

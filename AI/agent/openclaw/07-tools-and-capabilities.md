@@ -373,7 +373,7 @@ src/cron/
         id: "weekly-review",
         schedule: "0 10 * * 1",   // 每周一
         prompt: "总结上周工作",
-        model: "anthropic/claude-opus-4-6"   // 可指定模型
+        model: "provider/model-id"           // 可指定模型
       }
     ]
   }
@@ -407,11 +407,20 @@ Heartbeat:
 1. Workspace Skills:  <workspace>/skills/
    └── 工作空间级别，优先级最高（per-agent）
 
-2. Managed Skills:    ~/.openclaw/skills/
+2. Project Agent Skills: <workspace>/.agents/skills/
+   └── 项目级 Agent 技能
+
+3. Personal Agent Skills: ~/.agents/skills/
+   └── 个人跨项目技能
+
+4. Managed Skills:    ~/.openclaw/skills/
    └── 用户级别，通过 ClawHub 安装（跨 agent 共享）
 
-3. Bundled Skills:    <install>/skills/
+5. Bundled Skills:    <install>/skills/
    └── OpenClaw 自带
+
+6. Extra Skill Dirs:  skills.load.extraDirs
+   └── 配置中显式追加的技能目录
 ```
 
 ### Skill 定义
@@ -424,7 +433,7 @@ trigger:
   command: "/morning"        # 斜杠命令触发
   # 或 schedule: "0 9 * * *"  # 定时触发
 config:
-  model: "anthropic/claude-sonnet-4-6"
+  model: "provider/model-id"
   thinking: "low"
 ---
 

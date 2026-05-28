@@ -1,21 +1,21 @@
 # OpenClaw 架构分析
 
-> 基于 https://github.com/openclaw/openclaw 仓库的深度架构分析
+> 基于 https://github.com/openclaw/openclaw 仓库与官方文档的架构分析
 > 初次分析：2026-03-21
-> 源码研究：2026-04-03（v2026.4.3）
+> 最近校对：2026-05-28（官方 package.json: 2026.5.28）
 
 ## 项目概述
 
-OpenClaw 是一个**个人 AI 助手平台**，核心理念是让用户在自己的设备上运行 AI 助手，通过已有的即时通讯渠道（WhatsApp、Telegram、Slack、Discord、Signal、iMessage 等 20+ 平台）进行交互。
+OpenClaw 是一个**个人 AI 助手平台**，核心理念是让用户在自己的设备上运行 AI 助手，通过已有的即时通讯渠道（WhatsApp、Telegram、Slack、Discord、Google Chat、Signal、iMessage、IRC、Microsoft Teams、Matrix、Feishu、LINE、Mattermost、Nextcloud Talk、Nostr、Synology Chat、Tlon、Twitch、Zalo、Zalo Personal、WeChat、QQ、WebChat 等）进行交互。
 
 **关键特征：**
 - **本地优先（Local-first）**：Gateway 运行在用户本机，所有数据留在本地
 - **多通道统一**：一个 Gateway 控制所有消息平台
 - **多 Agent 路由**：支持多个独立 Agent，每个有自己的工作空间、会话和权限
-- **插件化架构**：核心精简，70+ 插件扩展能力（通道、LLM、记忆、工具...）
+- **插件化架构**：核心精简，通过内置扩展与外部插件扩展通道、LLM、记忆、工具等能力
 - **跨平台**：macOS/iOS/Android 客户端 + CLI + Web UI
 
-**技术栈：** TypeScript (ESM)，Node.js 24+，pnpm monorepo，Vitest 测试，Lit Web Components
+**技术栈：** TypeScript (ESM)，Node 24 推荐 / Node 22.19+ 最低，pnpm monorepo，Vitest 测试，Lit Web Components
 
 ## 文档索引
 
@@ -31,8 +31,7 @@ OpenClaw 是一个**个人 AI 助手平台**，核心理念是让用户在自己
 | [08-context-and-memory.md](./08-context-and-memory.md) | 上下文引擎与记忆（4 阶段生命周期、向量检索、记忆刷新） | 核心 |
 | [09-companion-apps.md](./09-companion-apps.md) | 客户端应用（macOS Swabble、iOS/Android Node、Control UI） | 参考 |
 | [10-project-structure.md](./10-project-structure.md) | 工程实践（构建、测试、配置、CI/CD、设计模式） | 参考 |
-| [11-source-code-analysis.md](./11-source-code-analysis.md) | 源码深度分析（核心函数、协议规范、配置格式、代码示例） | 进阶 |
-| [RESEARCH-REPORT-2026-04-03.md](./RESEARCH-REPORT-2026-04-03.md) | 2026-04-03 源码研究报告（关键发现、文件清单、更新建议） | 参考 |
+| [11-source-code-analysis.md](./11-source-code-analysis.md) | 源码/官方文档校对笔记（当前版本差异、易过期点） | 进阶 |
 
 ## 架构总览图
 
@@ -54,7 +53,7 @@ OpenClaw 是一个**个人 AI 助手平台**，核心理念是让用户在自己
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
 │  │  Plugin  │  │   Auth   │  │  Node    │  │  Canvas  │            │
 │  │ Runtime  │  │ & Pairing│  │ Registry │  │   Host   │            │
-│  │(70+ ext) │  │(Ed25519) │  │(iOS/And) │  │ (A2UI)   │            │
+│  │(extens.) │  │(Ed25519) │  │(iOS/And) │  │ (A2UI)   │            │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
 │                                                                      │
 │  HTTP Pipeline (10 stages):                                          │
@@ -99,7 +98,7 @@ OpenClaw 是一个**个人 AI 助手平台**，核心理念是让用户在自己
        │
 6. Session Key 解析（dmScope + channel + peer → agent:<agentId>:...）
        │
-7. Queue 管理（per-session lane 序列化，collect/steer/followup 模式）
+7. Queue 管理（per-session lane 序列化，默认 steer，可切换 followup/collect/interrupt）
        │
 8. Pi Agent Runtime 处理:
    a. Context Engine 组装上下文

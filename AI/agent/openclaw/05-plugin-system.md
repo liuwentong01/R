@@ -327,8 +327,8 @@ export default function register(api: PluginAPI) {
     // 模型目录
     catalog: [
       {
-        id: "gpt-5.4",
-        name: "GPT-5.4",
+        id: "<model-id>",
+        name: "Current OpenAI model",
         contextWindow: 256000,
         maxTokens: 32000,
         reasoning: true,
@@ -747,15 +747,18 @@ extensions/telegram/
 | `twitch` | Twitch | TMI.js |
 | `zalo` | Zalo OA | Zalo API |
 | `zalouser` | Zalo 个人 | Zalo API |
+| `wechat` | WeChat | 微信生态接入 |
+| `qqbot` | QQ | QQ Bot |
+| `webchat` | WebChat | Gateway Web UI |
 | `voice-call` | 语音通话 | Twilio/ElevenLabs |
 
 ### Provider 插件 (LLM Models)
 
 | 插件 | 提供者 | 示例模型 |
 |------|--------|----------|
-| `openai` | OpenAI | gpt-5.4 |
-| `anthropic` | Anthropic | claude-opus-4-6 |
-| `google` | Google Gemini | gemini-3.1-pro |
+| `openai` | OpenAI | 以官方模型目录为准 |
+| `anthropic` | Anthropic | 以官方模型目录为准 |
+| `google` | Google Gemini | 以官方模型目录为准 |
 | `openrouter` | OpenRouter | 聚合多家 |
 | `ollama` | Ollama | 本地模型 |
 | `github-copilot` | GitHub Copilot | OAuth |

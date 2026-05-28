@@ -12,15 +12,15 @@ packages:
   - .              # 根包（openclaw 核心）
   - ui             # Control UI（Vite + Lit）
   - packages/*     # 遗留/兼容包（clawdbot, moltbot）
-  - extensions/*   # 70+ 插件包
+  - extensions/*   # 内置扩展包
 ```
 
-`onlyBuiltDependencies` 列表控制哪些原生模块在安装时编译：
+当前 workspace 配置还包含供应链安全相关设置（如 `minimumReleaseAge`、`blockExoticSubdeps`、`overrides`、`allowBuilds` 等），其中 `allowBuilds` 控制哪些原生模块允许在安装时执行构建：
 - `@lydell/node-pty` — 终端模拟
 - `@napi-rs/canvas` — Canvas 渲染
 - `sharp` — 图片处理
 - `node-llama-cpp` — 本地 LLM
-- `esbuild` — 快速 JS 打包
+- `esbuild` / `rastermill` 等构建或媒体处理相关依赖
 
 ### 包依赖关系
 
@@ -32,7 +32,7 @@ openclaw (根包)
 ├── ui/ (独立包)
 │   └── 使用 Vite 构建，Lit 框架
 │
-├── extensions/* (70+ 独立包)
+├── extensions/* (内置扩展包)
 │   ├── devDependencies: openclaw (workspace:*)
 │   ├── dependencies: 插件特有依赖
 │   └── peerDependencies: openclaw (运行时解析)
@@ -59,13 +59,13 @@ openclaw (根包)
 ### CalVer 版本格式
 
 ```
-CLI: YYYY.M.D (例: 2026.3.14)
+CLI: YYYY.M.D (例: 2026.5.28)
 稳定版: vYYYY.M.D
 Beta: vYYYY.M.D-beta.N
 补丁: vYYYY.M.D-patch
 ```
 
-**包管理器**：`pnpm@10.23.0`（通过 `packageManager` 字段锁定）
+**包管理器**：`pnpm@11.2.2`（通过 `packageManager` 字段锁定）
 
 ### 发布通道
 
@@ -78,7 +78,7 @@ dev    → npm dist-tag: dev (从 main 分支发布时)
 ### 版本同步位置
 
 ```
-package.json                              → CLI 版本 (2026.3.14)
+package.json                              → CLI 版本 (当前校对为 2026.5.28)
 apps/android/app/build.gradle.kts         → Android (versionName/versionCode)
 apps/ios/Sources/Info.plist               → iOS (CFBundleShortVersionString)
 apps/macos/.../Info.plist                 → macOS (CFBundleShortVersionString)
@@ -157,11 +157,10 @@ pnpm ui:build   # Vite 构建 Control UI
 | 包 | 版本 | 用途 |
 |---|---|---|
 | `@sinclair/typebox` | 0.34 | 运行时配置验证（TypeBox schemas + ajv） |
-| `@modelcontextprotocol/sdk` | 1.27 | MCP 支持 |
-| `@agentclientprotocol/sdk` | 0.16 | ACP（Agent Client Protocol） |
-| `@mariozechner/pi-*` | 0.60 | Pi Agent 核心/编码/TUI |
+| `@modelcontextprotocol/sdk` | 1.29 | MCP 支持 |
+| `@agentclientprotocol/sdk` | 0.22 | ACP（Agent Client Protocol） |
+| `@mariozechner/pi-*` | 以 package.json 为准 | Pi Agent 核心/编码/TUI |
 | `hono` | 4.12 | HTTP 框架 |
-| `express` | 5.2 | 额外 HTTP 路由 |
 | `commander` | 14 | CLI 框架 |
 | `chokidar` | 5 | 文件监视 |
 | `@lydell/node-pty` | — | 终端模拟 |
@@ -169,9 +168,9 @@ pnpm ui:build   # Vite 构建 Control UI
 **开发依赖**：
 | 包 | 版本 | 用途 |
 |---|---|---|
-| `tsdown` | 0.21 | 打包器（Rolldown 内核） |
+| `tsdown` | 0.22 | 打包器（Rolldown 内核） |
 | `oxlint` / `oxfmt` | — | Oxc 生态的 lint + 格式化 |
-| `@typescript/native-preview` | 7.0.0-dev | 原生 TS 编译器（`tsgo`） |
+| `@typescript/native-preview` | 7.0.0-dev.20260524 | 原生 TS 编译器（`tsgo`） |
 | `vitest` | 4.1 | 测试框架 |
 | `tsx` | — | TypeScript 执行器 |
 
@@ -566,7 +565,7 @@ FROM node:24-bookworm AS runtime
 ```json
 {
   "name": "@openclaw/telegram",
-  "version": "2026.3.14",
+  "version": "<root-version>",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -596,7 +595,7 @@ FROM node:24-bookworm AS runtime
 - `channel` — 通道元数据（id, label, 文档路径, UI 简介, 图标）
 - `bundle` — 构建时标志（如将运行时依赖暂存到主 bundle）
 
-所有扩展是 workspace 包，与根包锁步版本（`2026.3.14`）。
+内置扩展是 workspace 包，版本通常与根包锁步；具体以各扩展 `package.json` 为准。
 
 ## 关键设计模式
 

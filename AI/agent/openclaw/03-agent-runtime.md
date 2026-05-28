@@ -240,7 +240,7 @@ Lane-aware FIFO Queue:
 └── 单 session: 1（严格序列化）
 ```
 
-### 5 种队列模式详解
+### 4 种队列模式详解
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -252,14 +252,12 @@ Lane-aware FIFO Queue:
 │      │                                                       │
 │      │   ← 新消息到达（排入队列）                            │
 │      │                                                       │
-│      ├── 工具调用 2 ──→ 跳过！                               │
-│      │   "Skipped due to queued user message."               │
-│      ├── 工具调用 3 ──→ 跳过！                               │
-│      │                                                       │
-│      └── 注入排队消息 → 继续下一轮 Assistant 回复            │
+│      ├── 当前 assistant 请求的工具批次继续执行               │
+│      ├── turn end 边界                                       │
+│      └── 注入排队消息 → 下一次 LLM 调用可见                  │
 │                                                              │
-│  行为: 在每次工具调用边界后检查，取消剩余工具调用，          │
-│        如果不在流式中则回退到 followup                        │
+│  行为: 默认模式。不会中断正在执行的工具调用，而是在模型边界   │
+│        注入新消息；运行时不支持 steering 时，等待当前运行结束 │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -273,7 +271,7 @@ Lane-aware FIFO Queue:
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│  collect 模式（默认）                                        │
+│  collect 模式                                                │
 │                                                              │
 │  正在执行的 Agent Run → 完成                                 │
 │      │                                                       │
@@ -284,15 +282,7 @@ Lane-aware FIFO Queue:
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│  steer-backlog 模式 (steer+backlog)                          │
-│                                                              │
-│  行为: steer 当前运行 + 保留消息用于 followup                │
-│  注意: 可能产生两次响应（steered + followup），              │
-│        流式界面可能看起来重复                                 │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│  interrupt 模式（遗留）                                      │
+│  interrupt 模式                                              │
 │                                                              │
 │  行为: 中止该 session 的活跃运行，然后运行最新消息           │
 └─────────────────────────────────────────────────────────────┘
@@ -304,8 +294,8 @@ Lane-aware FIFO Queue:
 {
   messages: {
     queue: {
-      mode: "collect",           // 全局默认模式
-      debounceMs: 1000,          // 等待安静后再启动 followup turn
+      mode: "steer",             // 当前官方默认模式
+      debounceMs: 500,           // followup/collect 安静窗口；Codex steer 批处理也使用
       cap: 20,                   // 每 session 最大排队数
       drop: "summarize",         // 溢出策略: old / new / summarize
       byChannel: {               // 每通道覆盖
@@ -316,12 +306,14 @@ Lane-aware FIFO Queue:
   }
 }
 // 运行时命令:
-// /queue collect              — 设置当前 session 模式
+// /queue steer                — 设置当前 session 模式
 // /queue collect debounce:2s cap:25 drop:summarize  — 组合选项
 // /queue default | /queue reset — 清除 session 覆盖
 ```
 
 **溢出策略 `summarize`**：保留被丢弃消息的简短要点列表，注入为合成 followup prompt。
+
+官方当前默认值：`mode: "steer"`、`debounceMs: 500`、`cap: 20`、`drop: "summarize"`。优先级为 session 内 `/queue` 覆盖 > `messages.queue.byChannel` > `messages.queue.mode` > 默认 `steer`。
 
 ## 模型提供者（Provider）
 
@@ -330,9 +322,9 @@ Lane-aware FIFO Queue:
 ```
 格式: "provider/model"
 示例:
-  - "openai/gpt-5.4"
-  - "anthropic/claude-opus-4-6"
-  - "google/gemini-3.1-pro-preview"
+  - "openai/<model-id>"
+  - "anthropic/<model-id>"
+  - "google/<model-id>"
   - "openrouter/moonshotai/kimi-k2"
 ```
 
@@ -458,7 +450,7 @@ Session 固定（缓存友好）:
 │  阶段 2: Model Fallback（跨 Provider）                   │
 │  ┌──────────────────┐    ┌──────────────────┐           │
 │  │ primary:          │ →→ │ fallback:        │            │
-│  │ anthropic/claude  │    │ openai/gpt-5.4   │            │
+│  │ anthropic/<model> │    │ openai/<model>    │            │
 │  └──────────────────┘    └──────────────────┘           │
 │                                                           │
 │  触发 failover 的错误类型:                                │
@@ -476,8 +468,8 @@ Session 固定（缓存友好）:
   agents: {
     defaults: {
       model: {
-        primary: "anthropic/claude-opus-4-6",
-        fallbacks: ["openai/gpt-5.4", "google/gemini-3.1-pro"]
+        primary: "anthropic/<model-id>",
+        fallbacks: ["openai/<model-id>", "google/<model-id>"]
       }
     }
   }
@@ -648,7 +640,7 @@ src/acp/
     │
     ├── 工具调用: sessions_spawn({
     │     prompt: "...",
-    │     model: "anthropic/claude-sonnet-4-6",  // 可选不同模型
+    │     model: "provider/model-id",            // 可选不同模型
     │     tools: { allow: ["read", "exec"] },    // 可选工具限制
     │     workspace: "..."                        // 可选独立工作空间
     │   })

@@ -483,7 +483,7 @@ Mattermost, Matrix, Nextcloud Talk, BlueBubbles, Zalo, Zalo Personal, Nostr, Fei
 
 9. Agent "work" 处理
    workspace: ~/.openclaw/workspace-work/
-   model: anthropic/claude-opus-4-6
+   model: provider/model-id
    → 执行 Agent 循环（上下文组装 → LLM → 工具 → 回复）
 
 10. 回复通过 WhatsApp 插件发送

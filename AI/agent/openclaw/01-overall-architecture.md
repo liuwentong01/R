@@ -16,13 +16,13 @@ OpenClaw 的架构围绕几个核心理念展开：
 
 ### 2. 插件化一切（Plugin Everything）
 
-OpenClaw 采用了激进的插件化策略，核心精简到最小，所有能力通过插件扩展：
+OpenClaw 采用了激进的插件化策略，核心精简到最小，大量能力通过内置扩展与外部插件扩展：
 
 ```
 核心（Core）           插件（Extensions）          数量
 ─────────              ──────────────────          ────
-Gateway 框架            消息通道                    20+（Telegram、Discord、WhatsApp...）
-Agent 运行时            LLM 提供者                  30+（OpenAI、Anthropic、Google...）
+Gateway 框架            消息通道                    WhatsApp、Telegram、Slack、Discord、WeChat、QQ、WebChat...
+Agent 运行时            LLM 提供者                  OpenAI、Anthropic、Google、OpenRouter、本地/自托管...
 Session 管理            记忆系统                    2（memory-core、memory-lancedb）
 路由引擎               上下文引擎                  可扩展
 CLI 框架               工具扩展                    10+（browser、firecrawl、tavily...）
@@ -121,7 +121,7 @@ openclaw/
 │   ├── cli/                # CLI 框架
 │   ├── commands/           # CLI 命令
 │   └── ...                 # 更多子模块
-├── extensions/             # 插件包（70+ 个）
+├── extensions/             # 内置扩展包（通道、Provider、工具、记忆等）
 │   ├── telegram/           # Telegram 通道（grammY）
 │   ├── discord/            # Discord 通道（discord.js）
 │   ├── whatsapp/           # WhatsApp 通道（Baileys）
@@ -148,9 +148,9 @@ openclaw/
 | 维度 | 选型 | 理由 |
 |------|------|------|
 | 语言 | TypeScript (ESM) | 编排系统，易于扩展和阅读 |
-| 运行时 | Node.js 24+（推荐）/ 22+ | 生态成熟，Bun 也支持 |
-| 包管理 | pnpm monorepo | workspace 多包管理，70+ 插件 |
-| 构建 | tsdown (基于 esbuild) | 快速 TypeScript 构建 |
+| 运行时 | Node 24（推荐）/ Node 22.19+ | 生态成熟，官方 README 以 Node 24 为推荐运行时 |
+| 包管理 | pnpm monorepo | workspace 多包管理，核心、UI、扩展统一管理 |
+| 构建 | tsdown (基于 Rolldown) | 快速 TypeScript 构建 |
 | 类型校验 | tsgo (Go 实现的 tsc) | 超快类型检查 |
 | 插件加载 | Jiti | 运行时 TypeScript 加载（含 SDK 别名映射） |
 | 格式化/Lint | Oxfmt + Oxlint | Rust 实现，极速 |
@@ -172,7 +172,7 @@ openclaw（根包）
 ├── @mariozechner/pi-coding-agent  — ModelRegistry 类型
 ├── @sinclair/typebox              — JSON Schema + TypeScript 类型
 ├── commander                      — CLI 框架
-└── extensions/* (workspace:*)     — 70+ 插件
+└── extensions/* (workspace:*)     — 内置扩展包
 
 extensions/<plugin>
 ├── devDependencies: openclaw (workspace:*)
@@ -225,9 +225,10 @@ openclaw gateway [--port 18789]
    └── dmScope + channel + peer → agent:<agentId>:...
        │
 5. Queue 管理（enqueue 到 per-session lane）
-   ├── collect: 合并排队消息（默认）
-   ├── steer: 注入当前运行
-   ├── followup: 等待当前完成
+   ├── steer: 默认行为，在运行时边界把新消息注入当前运行
+   ├── collect: 当前运行结束后合并兼容排队消息
+   ├── followup: 当前运行结束后逐条作为后续 turn
+   ├── interrupt: 中止当前运行并处理最新消息
    └── typing indicator 立即触发
        │
 6. Agent 运行时执行:

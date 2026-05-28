@@ -346,17 +346,17 @@ src/commands/
 ```bash
 # 安装 & 设置
 openclaw onboard --install-daemon   # 交互式设置向导
-openclaw setup                      # 创建配置 + 工作空间
 openclaw doctor                     # 诊断检查
 
 # Gateway 管理
-openclaw gateway run --port 18789   # 启动 Gateway
+openclaw gateway --port 18789 --verbose  # 前台调试模式启动 Gateway
+openclaw gateway status             # 查看守护进程状态
 openclaw gateway restart            # 重启
 openclaw gateway stop               # 停止
 
 # 消息
 openclaw agent --message "..." --thinking high  # 直接与 Agent 对话
-openclaw message send --to +86... --message "Hi"  # 发送消息
+openclaw message send --target +86... --message "Hi"  # 发送消息
 
 # 通道管理
 openclaw channels status --probe    # 通道状态
@@ -368,7 +368,7 @@ openclaw sessions cleanup --dry-run # 清理预览
 
 # 模型管理
 openclaw models list                # 列出可用模型
-openclaw models set anthropic/claude-opus-4-6  # 设置默认模型
+openclaw models set provider/model-id  # 设置默认模型
 openclaw models auth login --provider openai   # 模型认证
 
 # 其他

@@ -142,7 +142,7 @@ flowchart TB
     %% ============================================================
     subgraph CHANNEL["03 通道与路由"]
         direction TB
-        MSG_IN["消息接入<br/>20+ 通道统一为<br/>InboundMessage 标准格式"]
+        MSG_IN["消息接入<br/>多通道统一为<br/>InboundMessage 标准格式"]
 
         subgraph MSG_PROCESS["消息预处理"]
             direction LR
@@ -268,7 +268,7 @@ flowchart TB
     %% ============================================================
     %% 09 插件系统
     %% ============================================================
-    subgraph PLUGIN["09 插件系统 - 70+ 插件"]
+    subgraph PLUGIN["09 插件系统 - 内置扩展 + 外部插件"]
         direction TB
         PLUG_DISCOVER["插件发现 - 4来源<br/>内置 / 社区 / 本地 / 远程<br/>含安全检查"]
         PLUG_MANIFEST["插件清单<br/>manifest 声明式配置"]
