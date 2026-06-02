@@ -28,6 +28,8 @@ export function createChatModel(mockResponses = DEFAULT_MOCK_RESPONSES) {
     apiKey: settings.deepseekApiKey,
     model: settings.model,
     temperature: settings.temperature,
+    timeout: settings.timeoutMs,
+    maxRetries: 0,
     configuration: {
       baseURL: settings.deepseekBaseUrl,
     },

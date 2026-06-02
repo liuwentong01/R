@@ -19,15 +19,26 @@ async function main(): Promise<void> {
     role: "前端面试教学助手",
     topic: "防抖和节流的区别",
   });
-  const response = await model.invoke(promptValue);
 
   for (const message of promptValue.toChatMessages()) {
     printMessage(message._getType(), String(message.content));
   }
+
+  printMessage("status", "Prompt 已生成，开始调用 Chat Model...");
+  const response = await model.invoke(promptValue);
+
   printMessage("assistant", String(response.content));
 }
 
 main().catch((error: unknown) => {
-  console.error(error);
+  const message = error instanceof Error ? error.message : String(error);
+
+  console.error("\n[error]");
+  console.error(`模型调用失败：${message}`);
+
+  if (message.includes("Service is too busy") || message.includes("503")) {
+    console.error("DeepSeek 当前服务繁忙，可以稍后重试，或临时把 LANGCHAIN_DEMO_PROVIDER 改回 mock 学习本地流程。");
+  }
+
   process.exitCode = 1;
 });

@@ -4,6 +4,7 @@ export interface Settings {
   provider: "mock" | "deepseek";
   model: string;
   temperature: number;
+  timeoutMs: number;
   deepseekApiKey?: string;
   deepseekBaseUrl: string;
 }
@@ -19,6 +20,7 @@ export function getSettings(): Settings {
     provider,
     model: process.env.LANGCHAIN_DEMO_MODEL ?? "deepseek-v4-flash",
     temperature: Number(process.env.LANGCHAIN_DEMO_TEMPERATURE ?? "0"),
+    timeoutMs: Number(process.env.LANGCHAIN_DEMO_TIMEOUT_MS ?? "20000"),
     deepseekApiKey: process.env.DEEPSEEK_API_KEY,
     deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
   };
