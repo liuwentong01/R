@@ -25,7 +25,7 @@ OpenClaw 是一个**个人 AI 助手平台**，核心理念是让用户在自己
 | [02-gateway.md](./02-gateway.md) | Gateway 控制平面（WS/HTTP 协议、认证、安全、健康监控） | 核心 |
 | [03-agent-runtime.md](./03-agent-runtime.md) | Pi Agent 运行时（执行循环、队列、流式输出、Provider Failover） | 核心 |
 | [04-session-management.md](./04-session-management.md) | 会话管理（Session Key、dmScope 安全、修剪、压缩、维护） | 核心 |
-| [05-plugin-system.md](./05-plugin-system.md) | 插件系统（25 个钩子、4 种执行模式、Plugin SDK API） | 核心 |
+| [05-plugin-system.md](./05-plugin-system.md) | 插件系统（38 个钩子、4 种执行模式、Plugin SDK API） | 核心 |
 | [06-channel-routing.md](./06-channel-routing.md) | 消息通道与路由（8 级匹配、多 Agent 绑定、防抖去重） | 重要 |
 | [07-tools-and-capabilities.md](./07-tools-and-capabilities.md) | 工具与能力（Browser/CDP、Canvas/A2UI、Node、Cron、Skills） | 重要 |
 | [08-context-and-memory.md](./08-context-and-memory.md) | 上下文引擎与记忆（4 阶段生命周期、向量检索、记忆刷新） | 核心 |

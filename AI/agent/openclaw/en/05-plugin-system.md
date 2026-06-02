@@ -15,7 +15,7 @@ src/plugins/
 ├── manifest.ts              # openclaw.plugin.json parsing and validation
 ├── registry.ts              # Plugin registry + OpenClawPluginApi factory
 ├── registry-empty.ts        # Empty registry creation
-├── types.ts                 # All plugin type definitions (including 25 hook event types)
+├── types.ts                 # All plugin type definitions (including 38 hook event types)
 ├── hooks.ts                 # Hook runner (priority sorting + 4 execution modes)
 ├── slots.ts                 # Exclusive slot system (memory, context-engine)
 ├── runtime/                 # Plugin runtime
@@ -264,12 +264,15 @@ runtime.modelAuth             // Resolve API keys for models/providers
 
 ### Registration Modes
 
-Plugins have three registration modes:
+`PluginRegistrationMode` (from `src/plugins/types.ts`) has 6 registration modes:
 
 ```
-"full"          — Full registration (tools, hooks, providers, etc. all registered)
-"setup-only"    — Channel plugin registration only (used to enable a setup wizard for unconfigured channels)
-"setup-runtime" — Lightweight channel registration (configured channels are deferred and fully loaded after the Gateway starts listening)
+"full"           — Live runtime activation (tools, hooks, providers, etc. all registered; long-lived side effects may start)
+"discovery"      — Read-only capability discovery (skip sockets/workers/clients)
+"tool-discovery" — Capability discovery for executable tools (skip channel runtime hydration)
+"setup-only"     — Lightweight channel setup entry only (used to enable a setup wizard for unconfigured channels)
+"setup-runtime"  — Setup flow plus the runtime channel entry (configured channels are deferred and fully loaded after the Gateway starts listening)
+"cli-metadata"   — CLI command metadata collection
 ```
 
 ### Channel Plugin API
@@ -451,18 +454,22 @@ api.registerContextEngine("my-engine", () => ({
 }));
 ```
 
-## Lifecycle Hook System (25 Hooks)
+## Lifecycle Hook System (38 Hooks)
 
-Plugins register hooks via `api.on(hookName, handler, { priority })`. There are 4 execution modes:
+Plugins register hooks via `api.on(hookName, handler, { priority })`. Hook handlers run sequentially in descending `priority` (higher runs first); same-priority hooks keep registration order. `api.on` also accepts an optional `timeoutMs` per-hook budget; operators can set budgets without patching plugin code via `plugins.entries.<id>.hooks.timeoutMs` / `hooks.timeouts.<hookName>`.
+
+The authoritative list of hook names is `PLUGIN_HOOK_NAMES` in `src/plugins/hook-types.ts` (which carries a compile-time exhaustiveness assertion against the `PluginHookName` union), totaling **38**, of which `subagent_spawning` and `deactivate` are deprecated compatibility aliases. By the runner mechanics there are 4 execution modes:
 
 ### 1. Void Hooks (Fire-and-Forget, Parallel Execution)
 ```
-agent_end             — Agent execution ended
-llm_input             — Before the LLM request is sent
-llm_output            — After the LLM response is received
+agent_end             — Agent execution ended (observe final messages, success state, duration)
+model_call_started    — Model call started (sanitized metadata, no prompt/response content)
+model_call_ended      — Model call ended (sanitized metadata, timing, outcome)
+llm_input             — Before the LLM request is sent (observe input)
+llm_output            — After the LLM response is received (observe output, usage)
 before_compaction     — Before compaction
 after_compaction      — After compaction
-before_reset          — Before a session reset
+before_reset          — Before a session reset (/new, /reset)
 message_received      — Message received
 message_sent          — After a message is sent
 after_tool_call       — After a tool call
@@ -472,22 +479,33 @@ subagent_spawned      — After a subagent is created
 subagent_ended        — After a subagent ends
 gateway_start         — Gateway started
 gateway_stop          — Gateway stopped
+cron_changed          — Gateway cron lifecycle change (added/updated/removed/started/finished/scheduled)
+deactivate            — Deprecated compatibility alias for gateway_stop
 ```
 
 ### 2. Modifying Hooks (Sequential Execution, Results Merged)
 ```
-before_model_resolve  — Before model resolution (can modify the model selection)
-before_prompt_build   — Before prompt building (can inject context)
-before_agent_start    — Before the Agent starts (can modify parameters)
-message_sending       — While a message is being sent (can modify content)
-before_tool_call      — Before a tool call (can modify arguments)
-subagent_spawning     — While a subagent is being created
+before_model_resolve  — Before model resolution (can override provider/model)
+agent_turn_prepare    — Consume queued turn injections and add same-turn context before prompt hooks
+before_prompt_build   — Before prompt building (can inject context/system prompt)
+before_agent_start    — Compatibility combined phase (deprecated; prefer the two hooks above)
+before_agent_finalize — Before a natural final answer is accepted (can request one more model pass)
+before_agent_run      — Gate before model input (returns pass/block; most-restrictive decision wins)
+message_sending       — While a message is being sent (can modify content or cancel)
+reply_payload_sending — Before a normalized reply payload is delivered (sequential, can rewrite or cancel)
+before_tool_call      — Before a tool call (can modify args, block, or require approval)
+subagent_spawning     — While a subagent is being created (deprecated)
 subagent_delivery_target — Subagent delivery target
+heartbeat_prompt_contribution — Heartbeat-turn-only context contribution
+before_install        — After a skill/plugin install scan (can add findings or block the install)
 ```
 
 ### 3. Claiming Hooks (Sequential Execution, First-Handled-Wins)
 ```
 inbound_claim         — Inbound message claim (the first handler wins)
+before_agent_reply    — Short-circuit the model turn with a synthetic reply
+before_dispatch       — Inspect/rewrite an outbound dispatch before channel handoff
+reply_dispatch        — Participate in the final reply-dispatch pipeline
 ```
 
 ### 4. Synchronous Hooks (Hot Path, No async)
@@ -496,14 +514,14 @@ tool_result_persist   — Tool result persistence
 before_message_write  — Before a message is written
 ```
 
-**Safety feature:** `before_prompt_build` and `before_agent_start` are classified as "prompt injection" hooks and are governed by the `plugins.entries.<id>.hooks.allowPromptInjection` policy.
+**Safety feature:** `PROMPT_INJECTION_HOOK_NAMES` lists 4 hooks classified as "prompt injection": `agent_turn_prepare`, `before_prompt_build`, `before_agent_start`, and `heartbeat_prompt_contribution`, governed by the `plugins.entries.<id>.hooks.allowPromptInjection` policy. In addition, the raw conversation hooks in `CONVERSATION_HOOK_NAMES` (`before_model_resolve`, `before_agent_reply`, `llm_input`, `llm_output`, `before_agent_finalize`, `agent_end`, `before_agent_run`) require non-bundled plugins to explicitly set `plugins.entries.<id>.hooks.allowConversationAccess = true` to register.
 
 ### Hook Runner Implementation (from source)
 
 ```typescript
 // src/plugins/hooks.ts — Hooks sorted by priority
 function getHooksForName<K extends PluginHookName>(
-  registry: PluginRegistry,
+  registry: HookRunnerRegistry,
   hookName: K,
 ): PluginHookRegistration<K>[] {
   return (registry.typedHooks as PluginHookRegistration<K>[])
@@ -516,6 +534,12 @@ function getHooksForName<K extends PluginHookName>(
 type HookRunnerOptions = {
   logger?: HookRunnerLogger;
   catchErrors?: boolean;  // Catch errors and log them instead of throwing
+  // Per-hook failure policy: defaults to fail-open, can be set to fail-closed per hook
+  failurePolicyByHook?: Partial<Record<PluginHookName, HookFailurePolicy>>;
+  // Timeout for void/observation hooks (a timed-out hook is logged and the runner continues; the plugin's work is not cancelled)
+  voidHookTimeoutMsByHook?: Partial<Record<PluginHookName, number>>;
+  // Timeout for modifying hooks (a timed-out hook is logged and skipped; the plugin's work is not cancelled)
+  modifyingHookTimeoutMsByHook?: Partial<Record<PluginHookName, number>>;
 };
 ```
 

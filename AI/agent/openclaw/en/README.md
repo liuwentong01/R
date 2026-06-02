@@ -25,7 +25,7 @@ OpenClaw is a **personal AI assistant platform**. Its core idea is to let users 
 | [02-gateway.md](./02-gateway.md) | Gateway control plane (WS/HTTP protocols, authentication, security, health monitoring) | Core |
 | [03-agent-runtime.md](./03-agent-runtime.md) | Pi Agent runtime (execution loop, queue, streaming, provider failover) | Core |
 | [04-session-management.md](./04-session-management.md) | Session management (session key, dmScope security, pruning, compaction, maintenance) | Core |
-| [05-plugin-system.md](./05-plugin-system.md) | Plugin system (25 hooks, 4 execution modes, Plugin SDK API) | Core |
+| [05-plugin-system.md](./05-plugin-system.md) | Plugin system (38 hooks, 4 execution modes, Plugin SDK API) | Core |
 | [06-channel-routing.md](./06-channel-routing.md) | Messaging channels and routing (8-level matching, multi-agent bindings, debounce and deduplication) | Important |
 | [07-tools-and-capabilities.md](./07-tools-and-capabilities.md) | Tools and capabilities (Browser/CDP, Canvas/A2UI, Node, Cron, Skills) | Important |
 | [08-context-and-memory.md](./08-context-and-memory.md) | Context engine and memory (4-phase lifecycle, vector retrieval, memory flush) | Core |

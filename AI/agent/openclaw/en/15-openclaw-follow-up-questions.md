@@ -97,8 +97,8 @@
 - Answer direction: system resources may get maxed out by a large number of sessions at once, dragging down overall stability.
 
 ### 15. `collect` / `followup` / `steer`
-- Common follow-up: Why is `collect` often the default choice?
-- Answer direction: it balances stability and a natural conversational experience—it's fairly balanced.
+- Common follow-up: Why is `steer` the default mode?
+- Answer direction: same-turn steering is the official default; it injects new messages into the active run without starting a second turn, giving faster and more natural responses.
 - Common follow-up: What's the risk of `steer`?
 - Answer direction: it may interrupt a tool chain that was about to complete, the logic is complex, and it's more likely to make the output seem repetitive or jumpy.
 

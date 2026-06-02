@@ -8,7 +8,7 @@ OpenClaw 的架构围绕几个核心理念展开：
 
 整个系统的核心是一个 **单进程 Gateway**（网关），它是所有消息流转的中枢：
 
-- **唯一入口**：所有消息通道（WhatsApp、Telegram 等）都连接到这一个 Gateway
+- **唯一入口**：所有消息通道（WhatsApp、Telegram 等）都连接到这一个 Gateway（怎么实现多机器部署，然后共享数据）
 - **WebSocket + HTTP 双协议**：WS 用于实时双向通信，HTTP 用于 Webhook/REST/UI
 - **单机单实例**：每台机器只运行一个 Gateway（例如 WhatsApp 只能有一个活跃的 Baileys 会话）
 - **默认绑定本地**：`ws://127.0.0.1:18789`，安全优先

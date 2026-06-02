@@ -15,7 +15,7 @@ src/plugins/
 ├── manifest.ts              # openclaw.plugin.json 解析与校验
 ├── registry.ts              # 插件注册表 + OpenClawPluginApi 工厂
 ├── registry-empty.ts        # 空注册表创建
-├── types.ts                 # 所有插件类型定义（含 25 个钩子事件类型）
+├── types.ts                 # 所有插件类型定义（含 38 个钩子事件类型）
 ├── hooks.ts                 # 钩子运行器（优先级排序 + 4 种执行模式）
 ├── slots.ts                 # 排他性 Slot 系统（memory、context-engine）
 ├── runtime/                 # 插件运行时
@@ -262,12 +262,15 @@ runtime.modelAuth             // 解析模型/提供者的 API Key
 
 ### 注册模式
 
-插件有三种注册模式：
+`PluginRegistrationMode`（来自 `src/plugins/types.ts`）共有 6 种注册模式：
 
 ```
-"full"          — 完全注册（工具、钩子、提供者等全部注册）
-"setup-only"    — 仅注册通道插件（用于未配置的通道启用设置向导）
-"setup-runtime" — 轻量通道注册（已配置的通道延迟到 Gateway listen 后完全加载）
+"full"           — 完全运行时激活（工具、钩子、提供者等全部注册，可启动长生命周期副作用）
+"discovery"      — 只读能力发现（跳过 socket/worker/client）
+"tool-discovery" — 可执行工具的能力发现（跳过通道运行时注水）
+"setup-only"     — 仅注册轻量通道设置入口（用于未配置的通道启用设置向导）
+"setup-runtime"  — 设置流程 + 运行时通道入口（已配置的通道延迟到 Gateway listen 后完全加载）
+"cli-metadata"   — CLI 命令元数据收集
 ```
 
 ### 通道插件 API
@@ -449,18 +452,22 @@ api.registerContextEngine("my-engine", () => ({
 }));
 ```
 
-## 生命周期钩子系统（25 个钩子）
+## 生命周期钩子系统（38 个钩子）
 
-插件通过 `api.on(hookName, handler, { priority })` 注册钩子。共有 4 种执行模式：
+插件通过 `api.on(hookName, handler, { priority })` 注册钩子。钩子按 `priority` 降序顺序执行（高优先级先跑），同优先级保持注册顺序。`api.on` 还接受可选的 `timeoutMs`，为单个钩子设定超时预算；运营者也可通过 `plugins.entries.<id>.hooks.timeoutMs` / `hooks.timeouts.<hookName>` 在不改插件代码的情况下设定预算。
+
+钩子名称的权威清单是 `src/plugins/hook-types.ts` 中的 `PLUGIN_HOOK_NAMES`（带编译期穷尽性断言，确保与 `PluginHookName` 联合类型一致），共 **38** 个，其中 `subagent_spawning` 与 `deactivate` 为已废弃的兼容别名。按运行器机制共有 4 种执行模式：
 
 ### 1. Void 钩子（fire-and-forget，并行执行）
 ```
-agent_end             — Agent 执行结束
-llm_input             — LLM 请求发送前
-llm_output            — LLM 响应接收后
+agent_end             — Agent 执行结束（观察最终消息、成功状态、时长）
+model_call_started    — 模型调用开始（脱敏元数据，不含 prompt/响应内容）
+model_call_ended      — 模型调用结束（脱敏元数据、时延、结果）
+llm_input             — LLM 请求发送前（观察输入）
+llm_output            — LLM 响应接收后（观察输出、用量）
 before_compaction     — 压缩前
 after_compaction      — 压缩后
-before_reset          — 会话重置前
+before_reset          — 会话重置前（/new、/reset）
 message_received      — 收到消息
 message_sent          — 消息发送后
 after_tool_call       — 工具调用后
@@ -470,22 +477,33 @@ subagent_spawned      — 子 Agent 创建后
 subagent_ended        — 子 Agent 结束后
 gateway_start         — Gateway 启动
 gateway_stop          — Gateway 停止
+cron_changed          — Gateway 定时任务生命周期变化（增/改/删/启动/完成/调度）
+deactivate            — gateway_stop 的已废弃兼容别名
 ```
 
 ### 2. Modifying 钩子（顺序执行，结果合并）
 ```
-before_model_resolve  — 模型解析前（可修改模型选择）
-before_prompt_build   — 提示构建前（可注入上下文）
-before_agent_start    — Agent 启动前（可修改参数）
-message_sending       — 消息发送中（可修改内容）
-before_tool_call      — 工具调用前（可修改参数）
-subagent_spawning     — 子 Agent 创建中
+before_model_resolve  — 模型解析前（可覆盖 provider/model）
+agent_turn_prepare    — 消费排队的回合注入，并在 prompt 钩子前添加同回合上下文
+before_prompt_build   — 提示构建前（可注入上下文/系统提示）
+before_agent_start    — 兼容性合并阶段（已弃用，建议改用上面两个钩子）
+before_agent_finalize — 自然终答被接受前（可请求再跑一轮模型）
+before_agent_run      — 模型输入前的门控（gate，返回 pass/block，取最严格决策）
+message_sending       — 消息发送中（可改写内容或取消）
+reply_payload_sending — 规范化回复负载发送前（顺序传递，可改写或取消）
+before_tool_call      — 工具调用前（可改参、阻断、要求审批）
+subagent_spawning     — 子 Agent 创建中（已弃用）
 subagent_delivery_target — 子 Agent 投递目标
+heartbeat_prompt_contribution — 仅心跳回合的上下文贡献
+before_install        — Skill/插件安装扫描后（可追加发现项或阻断安装）
 ```
 
 ### 3. Claiming 钩子（顺序执行，first-handled-wins）
 ```
 inbound_claim         — 入站消息认领（第一个处理者获胜）
+before_agent_reply    — 用合成回复短路模型回合
+before_dispatch       — 出站派发前检查/改写
+reply_dispatch        — 参与最终回复派发管线
 ```
 
 ### 4. Synchronous 钩子（热路径，无 async）
@@ -494,14 +512,14 @@ tool_result_persist   — 工具结果持久化
 before_message_write  — 消息写入前
 ```
 
-**安全特性：** `before_prompt_build` 和 `before_agent_start` 被分类为 "prompt injection" 钩子，受 `plugins.entries.<id>.hooks.allowPromptInjection` 策略控制。
+**安全特性：** `PROMPT_INJECTION_HOOK_NAMES` 共 4 个被分类为 "prompt injection" 钩子：`agent_turn_prepare`、`before_prompt_build`、`before_agent_start`、`heartbeat_prompt_contribution`，受 `plugins.entries.<id>.hooks.allowPromptInjection` 策略控制。此外，`CONVERSATION_HOOK_NAMES`（`before_model_resolve`、`before_agent_reply`、`llm_input`、`llm_output`、`before_agent_finalize`、`agent_end`、`before_agent_run`）这类原始会话钩子要求非内置插件显式设置 `plugins.entries.<id>.hooks.allowConversationAccess = true` 才能注册。
 
 ### 钩子运行器实现（来自源码）
 
 ```typescript
 // src/plugins/hooks.ts — 钩子按优先级排序
 function getHooksForName<K extends PluginHookName>(
-  registry: PluginRegistry,
+  registry: HookRunnerRegistry,
   hookName: K,
 ): PluginHookRegistration<K>[] {
   return (registry.typedHooks as PluginHookRegistration<K>[])
@@ -514,6 +532,12 @@ function getHooksForName<K extends PluginHookName>(
 type HookRunnerOptions = {
   logger?: HookRunnerLogger;
   catchErrors?: boolean;  // 捕获错误并记录而不是抛出
+  // 按钩子名设定失败策略：默认 fail-open，可对个别钩子改为 fail-closed
+  failurePolicyByHook?: Partial<Record<PluginHookName, HookFailurePolicy>>;
+  // void/observation 钩子的超时（超时被记录后运行器继续，不取消插件底层工作）
+  voidHookTimeoutMsByHook?: Partial<Record<PluginHookName, number>>;
+  // modifying 钩子的超时（超时被记录并跳过，不取消插件底层工作）
+  modifyingHookTimeoutMsByHook?: Partial<Record<PluginHookName, number>>;
 };
 ```
 

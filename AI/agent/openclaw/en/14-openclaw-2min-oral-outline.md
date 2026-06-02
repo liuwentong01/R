@@ -97,9 +97,9 @@
 - Summary: this is scheduling capability that a production-grade Agent system must have.
 
 ### 15. What scenarios suit `collect`, `followup`, and `steer`?
-- `followup`: the most stable; handles new messages only after the current turn ends.
-- `collect`: the more natural default; merges queued messages into a single followup.
-- `steer`: the most flexible; detects new messages mid-flight and tries to redirect.
+- `steer`: the system default; injects new messages after the current turn finishes its tool calls and before the next model call.
+- `followup`: the most stable; handles new messages one by one after the current turn ends.
+- `collect`: merges queued messages into a single followup after a quiet window.
 - Wrap up: these aren't better-or-worse; they're choices for different interaction styles and task types.
 
 ### 16. Why is the system prompt assembled dynamically?
