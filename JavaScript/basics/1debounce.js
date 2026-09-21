@@ -52,4 +52,3 @@ function debounceOptimized(fn, wait, immediate = false) {
 
   return debounced;
 }
-
