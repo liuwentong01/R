@@ -1,3 +1,11 @@
+// new LazyManV1("Tony").eat("lunch").eat("dinner").sleepFirst(5).sleep(4).eat("junk food");
+
+// Hi I am Tony
+// 等待了5秒...
+// I am eating lunch
+// I am eating dinner
+// 等待了4秒...
+// I am eating junk food
 
 // ===================== 写法一：ES6+ 箭头函数简化版 =====================
 // 改进点：
@@ -27,7 +35,7 @@ class LazyManV1 {
       setTimeout(() => {
         console.log(`等待了${time}秒...`);
         this.next(); // 异步等待结束后，手动触发下一个
-      }, time * 1000)
+      }, time * 1000),
     );
     return this;
   }
@@ -38,7 +46,7 @@ class LazyManV1 {
       setTimeout(() => {
         console.log(`等待了${time}秒...`);
         this.next();
-      }, time * 1000)
+      }, time * 1000),
     );
     return this;
   }
@@ -48,15 +56,6 @@ class LazyManV1 {
     this.taskList.shift()?.();
   }
 }
-
-// new LazyManV1("Tony").eat("lunch").eat("dinner").sleepFirst(5).sleep(4).eat("junk food");
-
-// Hi I am Tony
-// 等待了5秒...
-// I am eating lunch
-// I am eating dinner
-// 等待了4秒...
-// I am eating junk food
 
 // ===================== 写法二：Promise 链式版 =====================
 // 核心思路：用 Promise 链替代任务数组 + 手动 next()
@@ -84,12 +83,13 @@ class LazyManV2 {
   sleep(time) {
     // 在链尾追加一个异步任务，返回 Promise 让链等待
     this.promise = this.promise.then(
-      () => new Promise(resolve =>
-        setTimeout(() => {
-          console.log(`等待了${time}秒...`);
-          resolve();
-        }, time * 1000)
-      )
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => {
+            console.log(`等待了${time}秒...`);
+            resolve();
+          }, time * 1000),
+        ),
     );
     return this;
   }
@@ -98,18 +98,17 @@ class LazyManV2 {
   // 做法是创建一个新的 head Promise，等它完成后再接上原来的链
   sleepFirst(time) {
     const oldPromise = this.promise;
-    this.promise = new Promise(resolve =>
+    this.promise = new Promise((resolve) =>
       setTimeout(() => {
         console.log(`等待了${time}秒...`);
         resolve();
-      }, time * 1000)
+      }, time * 1000),
     ).then(() => oldPromise); // head 完成后，继续执行原有的链
     return this;
   }
 }
 
 // new LazyManV2("Tony").eat("lunch").eat("dinner").sleepFirst(5).sleep(4).eat("junk food");
-
 
 // ===================== 写法三：Async/Await 版（推荐） =====================
 // 核心思路：任务只负责定义"做什么"（返回值或 Promise），执行引擎负责"怎么跑"
@@ -145,12 +144,13 @@ class LazyManV3 {
   sleep(time) {
     // 异步任务，返回 Promise，run() 中的 await 会等待它完成
     this.taskList.push(
-      () => new Promise(resolve =>
-        setTimeout(() => {
-          console.log(`等待了${time}秒...`);
-          resolve();
-        }, time * 1000)
-      )
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => {
+            console.log(`等待了${time}秒...`);
+            resolve();
+          }, time * 1000),
+        ),
     );
     return this;
   }
@@ -158,19 +158,19 @@ class LazyManV3 {
   // sleepFirst 同样是异步任务，但用 unshift 插到队头
   sleepFirst(time) {
     this.taskList.unshift(
-      () => new Promise(resolve =>
-        setTimeout(() => {
-          console.log(`等待了${time}秒...`);
-          resolve();
-        }, time * 1000)
-      )
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => {
+            console.log(`等待了${time}秒...`);
+            resolve();
+          }, time * 1000),
+        ),
     );
     return this;
   }
 }
 
- new LazyManV3("Tony3").eat("lunch").eat("dinner").sleepFirst(5).sleep(4).eat("junk food");
-
+new LazyManV3("Tony3").eat("lunch").eat("dinner").sleepFirst(5).sleep(4).eat("junk food");
 
 // ===================== 测试 =====================
 // 取消注释任意一行来测试对应版本，预期输出：

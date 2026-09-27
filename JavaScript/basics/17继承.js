@@ -16,7 +16,6 @@ var d1b = new Dog1();
 d1a.colors.push("brown");
 console.log(d1b.colors); // ['black','white','brown'] —— 共享了引用属性
 
-
 // 2. 组合继承（经典继承）
 // 缺点：父构造函数被调用两次（new Animal2 + Animal2.call）
 function Animal2(name) {
@@ -37,7 +36,6 @@ Dog2.prototype.constructor = Dog2;
 var d2 = new Dog2("旺财", 3);
 console.log(d2.getName(), d2.age); // '旺财' 3
 
-
 // 3. 原型式继承
 // 本质：对传入对象的浅拷贝，等同于 Object.create
 function objectCreate(o) {
@@ -52,7 +50,6 @@ var p2 = objectCreate(person);
 p1.hobbies.push("coding");
 console.log(p2.hobbies); // ['reading','coding'] —— 同样会共享引用属性
 
-
 // 4. 寄生式继承
 // 在原型式继承基础上增强对象，缺点：方法无法复用
 function createAnother(original) {
@@ -66,15 +63,8 @@ function createAnother(original) {
 var p3 = createAnother(person);
 p3.sayHi(); // 'hi'
 
-
 // 5. 寄生组合式继承（最优方案）
 // 只调用一次父构造函数，原型链保持不变
-function inheritPrototype(Child, Parent) {
-  var prototype = Object.create(Parent.prototype);
-  prototype.constructor = Child;
-  Child.prototype = prototype;
-}
-
 function Animal5(name) {
   this.name = name;
   this.colors = ["black", "white"];
@@ -87,8 +77,10 @@ function Dog5(name, age) {
   Animal5.call(this, name);
   this.age = age;
 }
-inheritPrototype(Dog5, Animal5);
 
+var prototype = Object.create(Animal5.prototype);
+prototype.constructor = Dog5;
+Dog5.prototype = prototype;
 Dog5.prototype.getAge = function () {
   return this.age;
 };
@@ -96,7 +88,6 @@ Dog5.prototype.getAge = function () {
 var d5 = new Dog5("小黑", 2);
 console.log(d5.getName(), d5.getAge()); // '小黑' 2
 console.log(d5 instanceof Animal5); // true
-
 
 // 6. ES6 class 继承
 // 语法糖，底层仍基于寄生组合继承

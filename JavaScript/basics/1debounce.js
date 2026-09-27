@@ -52,3 +52,19 @@ function debounceOptimized(fn, wait, immediate = false) {
 
   return debounced;
 }
+
+const debounce3 = (fn, interval) => {
+  let timer = null;
+  return function () {
+    let self = this;
+    let args = arguments;
+    if (timer) {
+      clearTimeout(timer);
+    } else {
+      fn.apply(self, args);
+    }
+    timer = setTimeout(() => {
+      timer = null;
+    }, interval);
+  };
+};

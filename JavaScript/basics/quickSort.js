@@ -1,35 +1,40 @@
-function quickSort(arr, L, R) {
-  if (arr == null || arr.length < 2) return;
-  if (L < R) {
-    var cur = dutchFlag(arr, L, R);
-    quickSort(arr, L, cur[0] - 1);
-    quickSort(arr, cur[1] + 1, R);
-  }
-}
-function dutchFlag(arr, L, R) {
-  var less = L - 1,
-    more = R;
-  while (L < more) {
-    if (arr[L] < arr[R]) {
-      swap(arr, ++less, L++);
-    } else if (arr[L] > arr[R]) {
-      swap(arr, --more, L);
-    } else {
-      L++;
+function quickSort(arr) {
+  // 只排序 arr 中下标 left 到 right 的部分
+  function sort(left, right) {
+    // 区间中没有元素或只有一个元素，不需要排序
+    if (left >= right) return;
+
+    let i = left; // 从左向右找“不该在左边”的数
+    let j = right; // 从右向左找“不该在右边”的数
+
+    // 取区间中间位置的值作为基准值
+    // 注意：保存的是值，后续交换元素不会改变 pivot
+    const pivot = arr[Math.floor((left + right) / 2)];
+
+    // 将小于 pivot 的数移到左侧，大于 pivot 的数移到右侧
+    while (i <= j) {
+      // 左边的数小于基准值，位置正确，继续向右找
+      while (arr[i] < pivot) i++;
+
+      // 右边的数大于基准值，位置正确，继续向左找
+      while (arr[j] > pivot) j--;
+
+      // 此时 arr[i] 应放右边、arr[j] 应放左边，交换它们
+      if (i <= j) {
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+        i++;
+        j--;
+      }
     }
+
+    // 分区结束后，左右两部分各自再排序
+    if (left < j) sort(left, j);
+    if (i < right) sort(i, right);
   }
-  swap(arr, L, R);
-  return [less + 1, more];
-}
-function swap(arr, i, j) {
-  let temp = arr[i];
-  arr[i] = arr[j];
-  arr[j] = temp;
+
+  sort(0, arr.length - 1);
+  return arr;
 }
 
-function main() {
-  var arr = [2, 15, 26, 27, 44, 19, 46, 48, 50, 3, 4, 5, 36, 38, 47, 19];
-  quickSort(arr, 0, 15);
-  console.log(arr);
-}
-main();
+const nums = [5, 3, 8, 4, 2];
+console.log(quickSort(nums)); // [2, 3, 4, 5, 8]

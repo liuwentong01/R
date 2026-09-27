@@ -51,3 +51,18 @@ emitter.emit("ages", 13); // 不输出
 emitter.on("focus", (state) => console.log("focus:", state));
 emitter.emit("focus", "xxx"); // focus: xxx
 emitter.emit("focus", "yyy"); // focus: yyy
+
+class Eventbus2 {
+  constructor() {
+    this.events = {};
+  }
+
+  emit(type, fn) {
+    if (this.events[type]) {
+      this.on(type, (...args) => {
+        fn(...args);
+        this.off(type, fn);
+      });
+    }
+  }
+}

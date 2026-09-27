@@ -12,11 +12,8 @@ function myNew1(Constructor, ...args) {
   const result = Constructor.apply(obj, args);
   // 构造函数返回对象或函数时使用该返回值，否则使用新创建的对象
   // 注意：必须同时判断 "object" 和 "function"，因为 typeof function === "function"
-  return result !== null && (typeof result === "object" || typeof result === "function")
-    ? result
-    : obj;
+  return result !== null && (typeof result === "object" || typeof result === "function") ? result : obj;
 }
-
 
 // ===================== 写法二：手动设置 __proto__（更底层） =====================
 // 不用 Object.create，手动拆解原型链的建立过程，帮助理解 Object.create 做了什么
@@ -26,11 +23,8 @@ function myNew2(Constructor, ...args) {
   // 注意：__proto__ 虽被广泛支持，但不推荐在生产中使用，此处仅为教学
   Object.setPrototypeOf(obj, Constructor.prototype);
   const result = Constructor.apply(obj, args);
-  return result !== null && (typeof result === "object" || typeof result === "function")
-    ? result
-    : obj;
+  return result !== null && (typeof result === "object" || typeof result === "function") ? result : obj;
 }
-
 
 // TODO ===================== 写法三：Reflect.construct（ES6+ 推荐） =====================
 // Reflect.construct 是语言层面对 new 操作的抽象，一行搞定
@@ -39,7 +33,6 @@ function myNew2(Constructor, ...args) {
 function myNew3(Constructor, ...args) {
   return Reflect.construct(Constructor, args);
 }
-
 
 // ===================== 写法四：支持 new.target 的完整版 =====================
 // new.target 是 ES6 引入的元属性，在构造函数中可以检测是否通过 new 调用
@@ -50,7 +43,6 @@ function myNew4(Constructor, ...args) {
   // 常见用途：抽象类通过 new.target 防止直接实例化
   return Reflect.construct(Constructor, args, Constructor);
 }
-
 
 // ===================== 测试 =====================
 function Person(name, value) {
@@ -87,8 +79,8 @@ function Weird() {
   return { custom: true };
 }
 console.log("\n--- 构造函数返回对象 ---");
-console.log(myNew1(Weird));  // { custom: true }
-console.log(myNew2(Weird));  // { custom: true }
+console.log(myNew1(Weird)); // { custom: true }
+console.log(myNew2(Weird)); // { custom: true }
 
 // 构造函数返回函数的边界测试
 function ReturnsFunc() {

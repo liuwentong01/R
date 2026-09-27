@@ -2,13 +2,12 @@
 Function.prototype.bind2 = function (context) {
   var self = this;
   var args = Array.prototype.slice.call(arguments, 1);
+
   var fn = function () {
     var bindArgs = Array.prototype.slice.call(arguments);
-    return self.apply(
-      this instanceof F ? this : context,
-      args.concat(bindArgs)
-    );
+    return self.apply(this instanceof F ? this : context, args.concat(bindArgs));
   };
+
   var F = function () {};
   F.prototype = this.prototype;
   fn.prototype = new F();

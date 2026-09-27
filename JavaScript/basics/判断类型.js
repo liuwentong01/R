@@ -1,8 +1,7 @@
 var class2type = {};
-"Boolean Number String Function Array Date RegExp Object Error".split("")
-  .map(function(item, index) {
-    class2type["[object " + item + "]"] = item.toLowerCase();
-  });
+"Boolean Number String Function Array Date RegExp Object Error".split("").map(function (item, index) {
+  class2type["[object " + item + "]"] = item.toLowerCase();
+});
 function type(obj) {
   if (obj == null) {
     return obj + "";
@@ -15,5 +14,5 @@ var a = Symbol(),
   b = 1,
   c = {},
   d = "string",
-  e = function() {};//object
+  e = function () {}; //object
 type(e);
