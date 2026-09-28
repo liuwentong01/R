@@ -15,7 +15,7 @@
  *          ↓
  *   Render Phase：执行组件 + Reconcile / Diff
  *          ↓
- *   Effect Tag：PLACEMENT / UPDATE / MOVE / DELETION
+ *   Effect Flag：PLACEMENT / UPDATE / MOVE / DELETION（教学命名）
  *          ↓
  *   Commit Phase：一次性修改真实 DOM
  *          ↓
@@ -33,14 +33,19 @@
  * 重要边界
  * --------
  * - 只支持一个 root。
- * - 只支持函数组件、普通 DOM 节点和文本节点；函数组件需返回单个根 Element 或空值。
+ * - 只支持函数组件、普通 DOM 节点和文本节点；函数组件可返回一个根节点、
+ *   字符串/数字或空值，不能返回多个并列根节点。
  * - 不支持 Fragment、组件返回数组、Context、ref、class component、Suspense、Error Boundary。
  * - 不支持 useEffect / useLayoutEffect；副作用队列与清理流程留作后续专题。
  * - 实现了简化版 keyed diff，但不是 React 生产版本的完整协调器。
- * - useState 不实现批处理、优先级、Lane、transition 与 eager bailout。
+ * - useState 不实现自动批处理、Lane、transition、相同值 eager bailout 与 render-phase update。
  * - 事件直接绑定在 DOM 上；真实 React 通常使用合成事件与事件委托。
- * - 为方便学习，暴露了 flushSync()；真实 React 的调度策略复杂得多。
+ * - 为方便学习，暴露了 flushSync()；它不是 react-dom/flushSync 的完整复刻。
  * - Render 遍历使用 Fiber 迭代执行；Commit 为缩短代码仍使用递归，不适合极深的树。
+ * - 这里的 render(element, container) 是教学入口，不等同于已被 createRoot 取代的
+ *   旧 ReactDOM.render；React 18/19 应使用 createRoot(container).render(element)。
+ * - React 18/19 的开发模式 StrictMode 可能额外调用 render/effect，以发现不纯逻辑；
+ *   本文件没有模拟该行为。
  *
  * 即使不运行本文件，也可以把它当作一张“React 更新链路地图”来阅读。
  */
@@ -157,7 +162,8 @@ function normalizeChildren(input, result = []) {
 }
 
 /**
- * createElement 是 JSX 编译后的目标函数。
+ * createElement 是经典 JSX transform 的编译目标；现代 automatic runtime 通常调用
+ * jsx/jsxs，但产物仍是 React Element 这类 UI 描述。本文件用 createElement 便于观察。
  *
  * 例如：
  *
@@ -172,6 +178,12 @@ function normalizeChildren(input, result = []) {
 function createElement(type, rawProps, ...rawChildren) {
   const inputProps = rawProps ?? {};
 
+  if (inputProps.ref != null) {
+    throw new Error(
+      "本教学协调器未实现 ref；不要把 ref 当作普通 DOM 属性。",
+    );
+  }
+
   /**
    * key 是给协调器使用的“身份提示”，不是普通业务 prop：
    * - 它只需要在同一个父节点的兄弟之间唯一。
@@ -180,15 +192,24 @@ function createElement(type, rawProps, ...rawChildren) {
    */
   const key = inputProps.key == null ? null : String(inputProps.key);
 
-  // 复制 props，避免修改调用者传进来的对象，同时显式移除保留字段 key。
+  // 复制 props，避免修改调用者传进来的对象，同时显式移除保留字段 key/ref。
   const props = {};
   for (const propName of Object.keys(inputProps)) {
-    if (propName !== "key") {
+    if (propName !== "key" && propName !== "ref" && propName !== "children") {
       props[propName] = inputProps[propName];
     }
   }
 
-  props.children = normalizeChildren(rawChildren);
+  // 显式的 children 实参优先；同时兼容 createElement(C, { children: value })。
+  // 为简化协调，本实现始终把 props.children 规范成数组；真实 React 的公开
+  // props.children 可能是单值，也可能是数组，不应依赖它总是数组。
+  const childInput =
+    rawChildren.length > 0
+      ? rawChildren
+      : Object.prototype.hasOwnProperty.call(inputProps, "children")
+        ? [inputProps.children]
+        : [];
+  props.children = normalizeChildren(childInput);
 
   return {
     type,
@@ -360,6 +381,7 @@ function updateFunctionComponent(fiber) {
   currentlyRenderingFiber = fiber;
   hookIndex = 0;
   fiber.hooks = [];
+  const previousHookCount = fiber.alternate?.hooks?.length ?? null;
 
   let returnedElement;
   try {
@@ -367,6 +389,13 @@ function updateFunctionComponent(fiber) {
   } finally {
     // 组件执行结束后立刻清空，避免在组件外误调用 useState 时写入上一棵 Fiber。
     currentlyRenderingFiber = null;
+  }
+
+  if (previousHookCount !== null && hookIndex !== previousHookCount) {
+    throw new Error(
+      `Hook 调用数量从 ${previousHookCount} 变为 ${hookIndex}；` +
+        "不要在条件、循环或提前 return 之后调用 Hook。",
+    );
   }
 
   const children = normalizeChildren([returnedElement]);
@@ -564,6 +593,10 @@ function reconcileChildren(parentFiber, newElements) {
 /**
  * 只有 Render Phase 完整结束后才会进入 Commit Phase。
  * 这样用户不会看到“只更新了一半”的页面，也让被打断的 Render 工作可以安全丢弃。
+ *
+ * 真实 React 的 Commit 还会区分 before-mutation、mutation、layout 等步骤，随后调度
+ * passive effects（useEffect）。Commit 本身不会像并发 Render 那样按 Fiber 时间切片；
+ * 本文件只模拟 DOM mutation。
  */
 function commitRoot() {
   // 被删除节点不在新树里，先根据单独保存的列表处理。
@@ -919,6 +952,10 @@ function setDomProperty(dom, name, previousValue, nextValue) {
  * 2. 新 Fiber 通过 alternate 找到旧 Fiber，继承上一轮 state。
  * 3. Hook 没有名字作为索引；第几个调用对应 hooks 数组的第几个位置。
  * 4. setState 不直接修改 DOM，它把 action 放进队列，再从 root 发起新一轮更新。
+ * 5. 每次 render 读取的是一次状态快照；函数式 action 会按入队顺序基于前一结果计算。
+ *
+ * 真实 React 18 createRoot 默认会对更多来源的更新自动批处理，并用 lane 表达更新
+ * 优先级；这里只把 action 入共享队列并重新从 root 调度，不模拟真实批处理边界。
  */
 function useState(initialState) {
   if (!currentlyRenderingFiber) {
@@ -1066,7 +1103,7 @@ globalThis.MiniReact = MiniReact;
  * 若想在浏览器中尝试，只需准备：
  *
  *   <div id="root"></div>
- *   <script src="mini-react-internals-demo.js"></script>
+ *   <script src="01-mini-react-internals-demo.js"></script>
  *
  * 然后取消最下方三行调用的注释。
  */
@@ -1164,10 +1201,17 @@ function DemoApp() {
  * hook.queue                    Hook update queue
  * alternate                     current ↔ workInProgress 双缓冲关系
  * requestIdleCallback fallback  React Scheduler（真实实现更完整、与优先级系统结合）
+ * DOM 上直接 addEventListener   React DOM 事件插件 + root 级委托（本文件未模拟）
  *
- * 继续深入源码时，建议牢牢记住三条分界线：
+ * 继续深入源码时，建议牢牢记住这些分界线：
  *
  * 1. Element ≠ Fiber ≠ DOM。
  * 2. Render Phase 负责计算，Commit Phase 负责产生外部可见副作用。
  * 3. state 属于 Fiber 身份；兄弟节点中的 Fiber 身份主要由 key + type 决定。
+ * 4. 可中断的是并发 Render，不是“所有 render”，Commit 也不会按 Fiber 时间切片。
+ * 5. lane 表示 React 更新及其优先级集合；Scheduler priority 表示宿主任务紧迫度，
+ *    二者会映射协作，但不是同一套枚举。
+ * 6. Render 必须保持纯粹，因为并发渲染、Suspense 或开发模式 StrictMode 都可能让它
+ *    被暂停、放弃或重新执行。
+ * 7. key 只在同级兄弟间参与身份匹配，不会作为普通 prop 传给组件。
  */
